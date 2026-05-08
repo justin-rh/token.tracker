@@ -48,7 +48,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Create core/threshold_manager.py (ThresholdState dataclass + get_threshold() with full unit tests)
+- [x] 02-01-PLAN.md — Create core/threshold_manager.py (ThresholdState dataclass + get_threshold() with full unit tests)
 - [ ] 02-02-PLAN.md — Wire ThresholdManager into monitoring/orchestrator.py (add threshold_state to monitoring_data)
 - [ ] 02-03-PLAN.md — Render threshold rows in ui/session_display.py (calibrating/auto/manual + INCLUDED/OVERAGE status)
 
@@ -73,5 +73,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Windows Foundation | 5/5 | Complete | 2026-05-08 |
-| 2. Threshold Detection | 0/3 | Not started | - |
+| 2. Threshold Detection | 1/3 | In Progress | - |
 | 3. Overage Pool Dashboard | 0/TBD | Not started | - |

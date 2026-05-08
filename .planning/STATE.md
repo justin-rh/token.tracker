@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-05-07)
 
 **Core value:** Know instantly whether you're on included tokens or burning the $500 overage pool — and how fast.
-**Current focus:** Phase 1 — Windows Foundation
+**Current focus:** Phase 2 — Threshold Detection
 
 ## Current Position
 
-Phase: 1 of 3 (Windows Foundation)
-Plan: 5 of 5 in current phase
-Status: Phase 1 Complete — Ready for Phase 2
-Last activity: 2026-05-08 — Completed 01-05 (Rich Display Fix and End-to-End Smoke Test)
+Phase: 2 of 3 (Threshold Detection)
+Plan: 1 of 3 in current phase
+Status: Phase 2 In Progress — Plan 1 Complete
+Last activity: 2026-05-08 — Completed 02-01-PLAN.md (ThresholdState dataclass and get_threshold())
 
-Progress: [█████░░░░░] 17%
+Progress: [██████░░░░] 23%
 
 ## Performance Metrics
 
@@ -28,6 +28,7 @@ Progress: [█████░░░░░] 17%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-windows-foundation | 5/5 | ~21 min | 4 min |
+| 02-threshold-detection | 1/3 | ~4 min | 4 min |
 
 **Recent Trend:**
 - Last 5 plans: 01-01, 01-02, 01-03, 01-04, 01-05
@@ -59,6 +60,11 @@ Recent decisions affecting current work:
 - [01-05] _get_console_width() in terminal/themes.py — always pass explicit width to Console(); never rely on Rich auto-detection on Windows
 - [01-05] Python 3.12 shim fix: claude_monitor/__init__.py updated to use importlib.util.find_spec instead of find_module (silently dropped in 3.12)
 - [01-05] VTP and UTF-8 setup confirmed already present in monitor.py from Plan 01-01; no duplicate setup needed
+- [02-01] ThresholdState is frozen dataclass — immutable result prevents accidental mutation downstream
+- [02-01] get_threshold() accepts optional config_dir for test isolation — avoids touching real ~/.claude-monitor/ in tests
+- [02-01] Decision order D-04 > D-02 > D-01: manual override checked first, then cold-start guard, then P90
+- [02-01] camelCase keys (isGap, isActive, totalTokens) used throughout to match serialized dict format from data/analysis.py
+- [02-01] TypeError raised on SessionBlock object input — prevents silent wrong-type data corruption
 
 ### Pending Todos
 
@@ -80,5 +86,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-05-08
-Stopped at: Completed 01-05-PLAN.md — Phase 1 complete, ready for Phase 2
+Stopped at: Completed 02-01-PLAN.md — ThresholdState + get_threshold() with 12 passing tests
 Resume file: None
