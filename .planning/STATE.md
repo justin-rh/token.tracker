@@ -10,27 +10,27 @@ See: .planning/PROJECT.md (updated 2026-05-07)
 ## Current Position
 
 Phase: 1 of 3 (Windows Foundation)
-Plan: 2 of 5 in current phase
+Plan: 3 of 5 in current phase
 Status: Executing
-Last activity: 2026-05-08 — Completed 01-02 (Windows Path Fix and File-Lock Handling)
+Last activity: 2026-05-08 — Completed 01-03 (requestId Deduplication)
 
-Progress: [██░░░░░░░░] 4%
+Progress: [███░░░░░░░] 6%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: 3.5 min
-- Total execution time: 0.1 hours
+- Total plans completed: 3
+- Average duration: 4.3 min
+- Total execution time: 0.2 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-windows-foundation | 2/5 | 7 min | 3.5 min |
+| 01-windows-foundation | 3/5 | 15 min | 5 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01
+- Last 5 plans: 01-01, 01-02, 01-03
 - Trend: On track
 
 *Updated after each plan completion*
@@ -52,6 +52,8 @@ Recent decisions affecting current work:
 - [01-02] Use os.environ["APPDATA"] not Path.home(): APPDATA resolves AppData/Roaming; home() resolves USERPROFILE root (wrong location)
 - [01-02] LOCKED_FILES as module-level list: avoids changing load_usage_entries return type; UI reads data.reader.LOCKED_FILES after each call
 - [01-02] utf-8-sig + newline='' on all JSONL opens: handles BOM and CRLF line endings without parse errors
+- [01-03] Collect all raw JSONL lines per file first, then deduplicate, then map — ensures max(output_tokens) selection works across full set of streaming chunks
+- [01-03] Existing _create_unique_hash() / processed_hashes dedup left in place as secondary guard against cross-file message_id duplicates (different concern)
 
 ### Pending Todos
 
@@ -61,7 +63,7 @@ None yet.
 
 - PITFALL: Windows AppData path — Claude Code logs are in `%APPDATA%\.claude\projects\`, not `~\.claude\projects\`. Must verify empirically on first run (Phase 1).
 - PITFALL: WinError 32 file sharing — active session JSONL is held open by Claude Code. Wrap reads in try/except PermissionError.
-- PITFALL: requestId deduplication — must verify upstream fork preserves this logic; without it token counts are 100-174x inflated.
+- PITFALL: requestId deduplication — RESOLVED in 01-03: _deduplicate_entries() added, max(output_tokens) per requestId, all 5 unit tests pass.
 - RESEARCH FLAG: Pool accumulation period (monthly vs billing-cycle) — architecture assumes calendar-month; verify with account owner before Phase 3.
 
 ## Deferred Items
@@ -73,5 +75,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-05-08
-Stopped at: Completed 01-02-PLAN.md — ready to execute 01-03
+Stopped at: Completed 01-03-PLAN.md — ready to execute 01-04
 Resume file: None

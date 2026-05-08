@@ -33,7 +33,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 Plans:
 - [x] 01-01-PLAN.md — Fork upstream and bootstrap project structure (pyproject.toml, monitor.py entry point)
 - [x] 01-02-PLAN.md — Windows path fix (APPDATA) and file-lock handling (PermissionError / WinError 32)
-- [ ] 01-03-PLAN.md — requestId deduplication with unit tests
+- [x] 01-03-PLAN.md — requestId deduplication with unit tests
 - [ ] 01-04-PLAN.md — Replace costUSD with statusline.jsonl cost source
 - [ ] 01-05-PLAN.md — Rich Console width fix, VTP setup, active-session indicator, smoke test checkpoint
 
@@ -67,6 +67,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Windows Foundation | 2/5 | In progress | - |
+| 1. Windows Foundation | 3/5 | In progress | - |
 | 2. Threshold Detection | 0/TBD | Not started | - |
 | 3. Overage Pool Dashboard | 0/TBD | Not started | - |
