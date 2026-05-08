@@ -6,6 +6,8 @@ into a single cohesive module.
 
 import json
 import logging
+import os
+import sys
 from datetime import datetime, timedelta
 from datetime import timezone as tz
 from pathlib import Path
@@ -28,6 +30,21 @@ TOKEN_OUTPUT = "output_tokens"
 
 logger = logging.getLogger(__name__)
 
+# Module-level list of JSONL files that were locked (PermissionError) during the
+# most recent read call.  Reset at the start of each load_usage_entries() call.
+# The UI layer reads this after each call to show an "(active session — data not
+# yet visible)" indicator per D-05.
+LOCKED_FILES: List[Path] = []
+
+
+def _get_default_claude_projects_path() -> Path:
+    """Return the Claude Code projects directory for Windows.
+
+    Uses %APPDATA% explicitly per D-03 — this is AppData\\Roaming\\.claude\\projects,
+    NOT ~\\.claude\\projects (which would be the USERPROFILE root, not AppData).
+    """
+    return Path(os.environ["APPDATA"]) / ".claude" / "projects"
+
 
 def load_usage_entries(
     data_path: Optional[str] = None,
@@ -46,7 +63,24 @@ def load_usage_entries(
     Returns:
         Tuple of (usage_entries, raw_data) where raw_data is None unless include_raw=True
     """
-    data_path = Path(data_path if data_path else "~/.claude/projects").expanduser()
+    global LOCKED_FILES
+    LOCKED_FILES = []
+
+    if data_path is None or data_path == "":
+        data_path = _get_default_claude_projects_path()
+    else:
+        data_path = Path(data_path)
+
+    if not data_path.exists():
+        print(
+            f"[WARNING] Claude projects directory not found: {data_path}",
+            file=sys.stderr,
+        )
+        print(
+            "[WARNING] Check that Claude Code has been run at least once.",
+            file=sys.stderr,
+        )
+
     timezone_handler = TimezoneHandler()
     pricing_calculator = PricingCalculator()
 
@@ -93,13 +127,16 @@ def load_all_raw_entries(data_path: Optional[str] = None) -> List[Dict[str, Any]
     Returns:
         List of raw JSON dictionaries
     """
-    data_path = Path(data_path if data_path else "~/.claude/projects").expanduser()
+    if data_path is None or data_path == "":
+        data_path = _get_default_claude_projects_path()
+    else:
+        data_path = Path(data_path)
     jsonl_files = _find_jsonl_files(data_path)
 
     all_raw_entries: List[Dict[str, Any]] = []
     for file_path in jsonl_files:
         try:
-            with open(file_path, encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8-sig", newline="") as f:
                 for line in f:
                     line = line.strip()
                     if not line:
@@ -108,6 +145,10 @@ def load_all_raw_entries(data_path: Optional[str] = None) -> List[Dict[str, Any]
                         all_raw_entries.append(json.loads(line))
                     except json.JSONDecodeError:
                         continue
+        except PermissionError:
+            # WinError 32: Claude Code holds a write lock on the active session file.
+            # Skip this file for this refresh cycle.
+            logger.warning("Permission denied reading %s — skipping (file locked)", file_path)
         except Exception as e:
             logger.exception(f"Error loading raw entries from {file_path}: {e}")
 
@@ -140,7 +181,7 @@ def _process_single_file(
         entries_filtered = 0
         entries_mapped = 0
 
-        with open(file_path, encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8-sig", newline="") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -175,6 +216,17 @@ def _process_single_file(
             f"File {file_path.name}: {entries_read} read, "
             f"{entries_filtered} filtered out, {entries_mapped} successfully mapped"
         )
+
+    except PermissionError:
+        # WinError 32: Claude Code holds a write lock on the active session file.
+        # Skip this file for this refresh cycle and record it so the UI can show
+        # the "(active session — data not yet visible)" indicator per D-05.
+        LOCKED_FILES.append(file_path)
+        logger.warning(
+            "Permission denied reading %s — file locked by another process (active session)",
+            file_path,
+        )
+        return [], None
 
     except Exception as e:
         logger.warning("Failed to read file %s: %s", file_path, e)
