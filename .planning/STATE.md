@@ -10,24 +10,24 @@ See: .planning/PROJECT.md (updated 2026-05-07)
 ## Current Position
 
 Phase: 1 of 3 (Windows Foundation)
-Plan: 1 of 5 in current phase
+Plan: 2 of 5 in current phase
 Status: Executing
-Last activity: 2026-05-08 — Completed 01-01 (Fork Upstream and Bootstrap Project Structure)
+Last activity: 2026-05-08 — Completed 01-02 (Windows Path Fix and File-Lock Handling)
 
-Progress: [█░░░░░░░░░] 2%
+Progress: [██░░░░░░░░] 4%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 5 min
+- Total plans completed: 2
+- Average duration: 3.5 min
 - Total execution time: 0.1 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-windows-foundation | 1/5 | 5 min | 5 min |
+| 01-windows-foundation | 2/5 | 7 min | 3.5 min |
 
 **Recent Trend:**
 - Last 5 plans: 01-01
@@ -49,6 +49,9 @@ Recent decisions affecting current work:
 - [01-01] claude_monitor/ shim package: aliases flat repo-root modules under claude_monitor.* namespace — avoids patching 40+ source files
 - [01-01] monitor.py delegates to cli.main:main(): upstream CLI parser unchanged; Windows UTF-8 + VTP setup first
 - [01-01] Windows VTP enabled via ctypes in monitor.py: ANSI colors work in cmd.exe
+- [01-02] Use os.environ["APPDATA"] not Path.home(): APPDATA resolves AppData/Roaming; home() resolves USERPROFILE root (wrong location)
+- [01-02] LOCKED_FILES as module-level list: avoids changing load_usage_entries return type; UI reads data.reader.LOCKED_FILES after each call
+- [01-02] utf-8-sig + newline='' on all JSONL opens: handles BOM and CRLF line endings without parse errors
 
 ### Pending Todos
 
@@ -70,5 +73,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-05-08
-Stopped at: Completed 01-01-PLAN.md — ready to execute 01-02
+Stopped at: Completed 01-02-PLAN.md — ready to execute 01-03
 Resume file: None
