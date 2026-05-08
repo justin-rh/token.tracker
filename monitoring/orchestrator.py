@@ -7,6 +7,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from claude_monitor.core.plans import DEFAULT_TOKEN_LIMIT, get_token_limit
 from claude_monitor.core.threshold_manager import ThresholdState, get_threshold
+from claude_monitor.core.pool_state_manager import PoolState, compute_pool_state
 from claude_monitor.error_handling import report_error
 from claude_monitor.monitoring.data_manager import DataManager
 from claude_monitor.monitoring.session_monitor import SessionMonitor
@@ -185,11 +186,15 @@ class MonitoringOrchestrator:
             else:
                 threshold_state = None
 
+            # Phase 3: compute pool state (pool spend, billing period, persistence)
+            pool_state: PoolState = compute_pool_state(blocks, threshold_state)
+
             # Prepare monitoring data
             monitoring_data: Dict[str, Any] = {
                 "data": data,
                 "token_limit": token_limit,           # int — kept for backward compat
                 "threshold_state": threshold_state,   # ThresholdState | None — new in Phase 2
+                "pool_state": pool_state,              # Phase 3 NEW
                 "args": self._args,
                 "session_id": self.session_monitor.current_session_id,
                 "session_count": self.session_monitor.session_count,
