@@ -15,17 +15,16 @@ Know instantly whether you're on included tokens or burning the $500 overage poo
 - [x] Reads Claude Code session logs from the Windows path — Phase 1 complete (2026-05-08)
 - [x] Infers daily token threshold via P90 percentile with cold-start guard (10-session minimum) — Phase 2 complete (2026-05-08)
 - [x] Shows clear calibrating / P90 / manual threshold indicator in the dashboard — Phase 2 complete (2026-05-08)
+- [x] Displays a clear INCLUDED / OVERAGE indicator for the current period — Phase 3 complete (2026-05-08)
+- [x] Shows est. dollar amount spent from the $500 overage pool in the current billing period — Phase 3 complete (2026-05-08)
+- [x] Shows percentage of the $500 pool remaining via progress bar — Phase 3 complete (2026-05-08)
+- [x] Shows est. burn rate in $/hr and projects when the $500 pool will be exhausted (OVERAGE only) — Phase 3 complete (2026-05-08)
+- [x] Pool spend persists across terminal restarts via atomic pool_spend.json cache — Phase 3 complete (2026-05-08)
+- [x] Pool size and billing cycle start day are config-editable without code changes — Phase 3 complete (2026-05-08)
 
 ### Active
 
-- [ ] Reads Claude Code session logs from the Windows path (`C:\Users\<name>\.claude\projects\`)
-- [ ] Infers daily token threshold via P90 percentile of historical session data (no manual configuration needed)
 - [ ] Detects whether the session reset model is rolling 5-hour windows or calendar-day
-- [ ] Displays a clear included / overage indicator for the current period
-- [ ] Shows dollar amount spent from the $500 overage pool in the current period
-- [ ] Shows percentage of the $500 pool remaining
-- [ ] Shows burn rate in $/hr and projects when the $500 pool will be exhausted
-- [ ] Live-updating terminal dashboard that renders correctly on Windows (PowerShell / Windows Terminal)
 
 ### Out of Scope
 
@@ -54,10 +53,12 @@ Know instantly whether you're on included tokens or burning the $500 overage poo
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Fork the reference tool | Avoids rebuilding JSONL reader, P90 calc, Rich UI from scratch; known working core | — Pending |
-| P90 threshold detection | User doesn't know their exact daily limit; P90 of historical sessions that hit limits is the reference tool's proven approach | — Pending |
-| $500 pool size is configurable | Pool size could change; hardcoding would require a code change to update | — Pending |
-| Windows-first scope | User is on Windows; cross-platform adds complexity without benefit for v1 | — Pending |
+| Fork the reference tool | Avoids rebuilding JSONL reader, P90 calc, Rich UI from scratch; known working core | Validated Phase 1 |
+| P90 threshold detection | User doesn't know their exact daily limit; P90 of historical sessions that hit limits is the reference tool's proven approach | Validated Phase 2 |
+| $500 pool size is configurable | Pool size could change; hardcoding would require a code change to update | Validated Phase 3 |
+| Windows-first scope | User is on Windows; cross-platform adds complexity without benefit for v1 | Validated Phase 1 |
+| pool_state_manager mirrors ThresholdManager pattern | Consistent frozen dataclass + factory fn pattern; same test fixtures; same config-read fallback | Validated Phase 3 |
+| Burn rate uses current session rate (not historical) | Simpler to compute from in-scope positional params; labeled as "est." to set expectations | Validated Phase 3 |
 
 ## Evolution
 
@@ -77,4 +78,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-07 after initialization*
+*Last updated: 2026-05-08 after Phase 3 completion — milestone v1.0 complete*
