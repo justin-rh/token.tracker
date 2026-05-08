@@ -17,6 +17,7 @@ from rich.text import Text
 from data.reader import LOCKED_FILES
 
 from claude_monitor.core.calculations import calculate_hourly_burn_rate
+from claude_monitor.core.threshold_manager import ThresholdState
 from claude_monitor.core.models import normalize_model_name
 from claude_monitor.core.plans import Plans
 from claude_monitor.ui.components import (
@@ -199,7 +200,11 @@ class DisplayController:
         }
 
     def create_data_display(
-        self, data: Dict[str, Any], args: Any, token_limit: int
+        self,
+        data: Dict[str, Any],
+        args: Any,
+        token_limit: int,
+        threshold_state: Optional[ThresholdState] = None,  # new in Phase 2
     ) -> RenderableType:
         """Create display renderable from data.
 
@@ -207,6 +212,7 @@ class DisplayController:
             data: Usage data dictionary
             args: Command line arguments
             token_limit: Current token limit
+            threshold_state: Optional threshold state from ThresholdManager (Phase 2)
 
         Returns:
             Rich renderable for display
@@ -270,6 +276,9 @@ class DisplayController:
         if Plans.is_valid_plan(args.plan):
             processed_data["cost_limit_p90"] = cost_limit_p90
             processed_data["messages_limit_p90"] = messages_limit_p90
+
+        # Phase 2: pass threshold_state through to session_display via kwargs
+        processed_data["threshold_state"] = threshold_state
 
         try:
             screen_buffer = self.session_display.format_active_session_screen(
