@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-05-07)
 ## Current Position
 
 Phase: 1 of 3 (Windows Foundation)
-Plan: 4 of 5 in current phase
-Status: Executing
-Last activity: 2026-05-08 — Completed 01-04 (Replace costUSD with statusline.jsonl Cost Source)
+Plan: 5 of 5 in current phase
+Status: Phase 1 Complete — Ready for Phase 2
+Last activity: 2026-05-08 — Completed 01-05 (Rich Display Fix and End-to-End Smoke Test)
 
-Progress: [████░░░░░░] 8%
+Progress: [█████░░░░░] 17%
 
 ## Performance Metrics
 
@@ -27,10 +27,10 @@ Progress: [████░░░░░░] 8%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-windows-foundation | 4/5 | 16 min | 4 min |
+| 01-windows-foundation | 5/5 | ~21 min | 4 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01, 01-02, 01-03, 01-04
+- Last 5 plans: 01-01, 01-02, 01-03, 01-04, 01-05
 - Trend: On track
 
 *Updated after each plan completion*
@@ -56,6 +56,9 @@ Recent decisions affecting current work:
 - [01-03] Existing _create_unique_hash() / processed_hashes dedup left in place as secondary guard against cross-file message_id duplicates (different concern)
 - [01-04] SessionBlock has no session_id field — statusline lookup falls through to pricing-engine fallback; adapt _extract_key() when real data structure known (D-07)
 - [01-04] _resolve_block_cost() added as module-level function in analyzer.py — separates cost resolution from block aggregation logic
+- [01-05] _get_console_width() in terminal/themes.py — always pass explicit width to Console(); never rely on Rich auto-detection on Windows
+- [01-05] Python 3.12 shim fix: claude_monitor/__init__.py updated to use importlib.util.find_spec instead of find_module (silently dropped in 3.12)
+- [01-05] VTP and UTF-8 setup confirmed already present in monitor.py from Plan 01-01; no duplicate setup needed
 
 ### Pending Todos
 
@@ -77,5 +80,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-05-08
-Stopped at: Completed 01-04-PLAN.md — ready to execute 01-05
+Stopped at: Completed 01-05-PLAN.md — Phase 1 complete, ready for Phase 2
 Resume file: None

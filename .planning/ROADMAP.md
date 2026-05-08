@@ -12,7 +12,7 @@ Fork the Claude-Code-Usage-Monitor Python tool, port it to Windows, wire up P90 
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Windows Foundation** - Fork and run the tool correctly on Windows with accurate data
+- [x] **Phase 1: Windows Foundation** - Fork and run the tool correctly on Windows with accurate data
 - [ ] **Phase 2: Threshold Detection** - Infer the daily included-token limit via P90 with cold-start guard
 - [ ] **Phase 3: Overage Pool Dashboard** - Display included/overage status, pool spend, burn rate, and projections
 
@@ -35,7 +35,7 @@ Plans:
 - [x] 01-02-PLAN.md — Windows path fix (APPDATA) and file-lock handling (PermissionError / WinError 32)
 - [x] 01-03-PLAN.md — requestId deduplication with unit tests
 - [x] 01-04-PLAN.md — Replace costUSD with statusline.jsonl cost source
-- [ ] 01-05-PLAN.md — Rich Console width fix, VTP setup, active-session indicator, smoke test checkpoint
+- [x] 01-05-PLAN.md — Rich Console width fix, VTP setup, active-session indicator, smoke test checkpoint
 
 ### Phase 2: Threshold Detection
 **Goal**: The tool automatically infers the daily included-token limit from historical session data, displays a calibration state during cold start, and accepts a manual override when the exact limit is known
@@ -67,6 +67,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Windows Foundation | 4/5 | In progress | - |
+| 1. Windows Foundation | 5/5 | Complete | 2026-05-08 |
 | 2. Threshold Detection | 0/TBD | Not started | - |
 | 3. Overage Pool Dashboard | 0/TBD | Not started | - |
