@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-07)
 
 **Core value:** Know instantly whether you're on included tokens or burning the $500 overage pool — and how fast.
-**Current focus:** Phase 2 — Threshold Detection
+**Current focus:** Phase 3 — Overage Pool Dashboard
 
 ## Current Position
 

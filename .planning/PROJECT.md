@@ -12,7 +12,9 @@ Know instantly whether you're on included tokens or burning the $500 overage poo
 
 ### Validated
 
-(None yet — ship to validate)
+- [x] Reads Claude Code session logs from the Windows path — Phase 1 complete (2026-05-08)
+- [x] Infers daily token threshold via P90 percentile with cold-start guard (10-session minimum) — Phase 2 complete (2026-05-08)
+- [x] Shows clear calibrating / P90 / manual threshold indicator in the dashboard — Phase 2 complete (2026-05-08)
 
 ### Active
 
