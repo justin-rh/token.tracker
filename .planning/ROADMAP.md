@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Windows Foundation** - Fork and run the tool correctly on Windows with accurate data
 - [ ] **Phase 2: Threshold Detection** - Infer the daily included-token limit via P90 with cold-start guard
-- [ ] **Phase 3: Overage Pool Dashboard** - Display included/overage status, pool spend, burn rate, and projections
+- [x] **Phase 3: Overage Pool Dashboard** - Display included/overage status, pool spend, burn rate, and projections (completed 2026-05-08)
 
 ## Phase Details
 
@@ -67,7 +67,7 @@ Plans:
 Plans:
 - [x] 03-01-PLAN.md — Create core/pool_state_manager.py (PoolState dataclass + compute_pool_state() + full unit tests)
 - [x] 03-02-PLAN.md — Wire pool_state through orchestrator → display_controller → cli/main.py
-- [ ] 03-03-PLAN.md — Render pool dashboard rows in ui/session_display.py (pool spend, progress bar, burn rate)
+- [x] 03-03-PLAN.md — Render pool dashboard rows in ui/session_display.py (pool spend, progress bar, burn rate)
 
 ## Progress
 
@@ -78,4 +78,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Windows Foundation | 5/5 | Complete | 2026-05-08 |
 | 2. Threshold Detection | 3/3 | Complete | 2026-05-08 |
-| 3. Overage Pool Dashboard | 2/3 | In progress | - |
+| 3. Overage Pool Dashboard | 3/3 | Complete   | 2026-05-08 |

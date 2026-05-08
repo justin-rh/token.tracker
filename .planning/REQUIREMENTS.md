@@ -20,17 +20,17 @@
 
 ### Overage Pool
 
-- [ ] **OVGE-01**: Dashboard displays a prominent `INCLUDED` / `OVERAGE` status indicator showing which side of the daily limit current usage falls on
-- [ ] **OVGE-02**: Dashboard shows estimated dollars spent from the $500 overage pool accumulated in the current billing month
-- [ ] **OVGE-03**: Dashboard shows percentage of the $500 pool remaining as a visual progress bar
-- [ ] **OVGE-04**: Dashboard shows $/hr burn rate and projected time until the $500 pool is exhausted at current rate
+- [x] **OVGE-01**: Dashboard displays a prominent `INCLUDED` / `OVERAGE` status indicator showing which side of the daily limit current usage falls on
+- [x] **OVGE-02**: Dashboard shows estimated dollars spent from the $500 overage pool accumulated in the current billing month
+- [x] **OVGE-03**: Dashboard shows percentage of the $500 pool remaining as a visual progress bar
+- [x] **OVGE-04**: Dashboard shows $/hr burn rate and projected time until the $500 pool is exhausted at current rate
 - [ ] **OVGE-05**: Pool spend state persists to a local file across dashboard restarts — closing the terminal does not reset the accumulated overage total
 - [ ] **OVGE-06**: Pool size (default $500) and billing cycle start date are user-configurable via settings
 
 ### Display
 
 - [ ] **DISP-01**: Live-updating terminal dashboard with configurable refresh rate (inheriting the reference tool's 0.1–20 Hz range)
-- [ ] **DISP-02**: All cost figures are prefixed with "est." in the UI to communicate they are estimates derived from local log data, not authoritative billing figures
+- [x] **DISP-02**: All cost figures are prefixed with "est." in the UI to communicate they are estimates derived from local log data, not authoritative billing figures
 
 ## v2 Requirements
 
@@ -67,13 +67,13 @@
 | THRS-01 | Phase 2 — Threshold Detection | In progress (02-01: get_threshold() implemented; 02-02: wired into orchestrator monitoring_data) |
 | THRS-02 | Phase 2 — Threshold Detection | In progress (02-01: calibrating status in ThresholdState; 02-02: token_limit=DEFAULT during calibration in orchestrator) |
 | THRS-03 | Phase 2 — Threshold Detection | In progress (02-01: manual override via config.json; 02-02: threshold_state passed to monitoring_data) |
-| OVGE-01 | Phase 3 — Overage Pool Dashboard | Pending |
-| OVGE-02 | Phase 3 — Overage Pool Dashboard | Pending |
-| OVGE-03 | Phase 3 — Overage Pool Dashboard | Pending |
-| OVGE-04 | Phase 3 — Overage Pool Dashboard | Pending |
+| OVGE-01 | Phase 3 — Overage Pool Dashboard | Complete |
+| OVGE-02 | Phase 3 — Overage Pool Dashboard | Complete |
+| OVGE-03 | Phase 3 — Overage Pool Dashboard | Complete |
+| OVGE-04 | Phase 3 — Overage Pool Dashboard | Complete |
 | OVGE-05 | Phase 3 — Overage Pool Dashboard | Pending |
 | OVGE-06 | Phase 3 — Overage Pool Dashboard | Pending |
-| DISP-02 | Phase 3 — Overage Pool Dashboard | Pending |
+| DISP-02 | Phase 3 — Overage Pool Dashboard | Complete |
 
 **Coverage:**
 - v1 requirements: 15 total
