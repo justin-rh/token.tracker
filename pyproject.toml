@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "token-tracker"
+version = "0.1.0"
+description = "Windows-compatible Claude Code token usage dashboard with company plan overage pool tracking"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [{ name = "Justin Rhoda", email = "justin.rhoda@masterelectronics.com" }]
+keywords = [
+  "ai", "analytics", "claude", "dashboard",
+  "developer-tools", "monitoring", "rich",
+  "terminal", "token", "usage", "overage"
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Topic :: Software Development :: Debuggers",
+  "Topic :: System :: Monitoring",
+  "Topic :: Terminals",
+  "Topic :: Utilities",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: Microsoft :: Windows",
+  "Typing :: Typed"
+]
+dependencies = [
+  "numpy>=1.21.0",
+  "pydantic>=2.0.0",
+  "pydantic-settings>=2.0.0",
+  "pyyaml>=6.0",
+  "pytz>=2023.3",
+  "rich>=13.7.0",
+  "tomli>=1.2.0; python_version < '3.11'",
+  "tzdata"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+  "pytest-cov>=6.0.0",
+  "pytest-mock>=3.14.0",
+  "ruff>=0.12.0"
+]
+
+[project.scripts]
+token-tracker = "monitor:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+  "claude_monitor",
+  "data",
+  "core",
+  "monitoring",
+  "ui",
+  "cli",
+  "terminal",
+  "utils"
+]
+exclude = ["tests*"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I"]
+ignore = ["E501"]
