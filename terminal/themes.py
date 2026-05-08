@@ -3,6 +3,7 @@
 import logging
 import os
 import re
+import shutil
 import sys
 import threading
 from dataclasses import dataclass
@@ -449,6 +450,19 @@ class BackgroundDetector:
         return BackgroundType.UNKNOWN
 
 
+def _get_console_width() -> int:
+    """Return terminal width for Rich Console.
+
+    Must be explicit — Rich auto-detection falls back to 80 on Windows when
+    stdout is redirected (confirmed Rich bug #3412, PITFALLS.md).
+    Falls back to 120 if detection fails (stdout not a TTY).
+    """
+    try:
+        return shutil.get_terminal_size().columns
+    except Exception:
+        return 120
+
+
 class ThemeManager:
     """Manages themes with auto-detection and thread safety."""
 
@@ -591,7 +605,11 @@ class ThemeManager:
             Rich Console instance configured with the selected theme.
         """
         theme: ThemeConfig = self.get_theme(theme_name, force_detection)
-        return Console(theme=theme.rich_theme, force_terminal=True)
+        return Console(
+            theme=theme.rich_theme,
+            force_terminal=True,
+            width=_get_console_width(),
+        )
 
     def get_current_theme(self) -> Optional[ThemeConfig]:
         """Get currently active theme.

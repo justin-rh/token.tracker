@@ -4,6 +4,7 @@ Orchestrates UI components and coordinates display updates.
 """
 
 import logging
+import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -12,6 +13,8 @@ import pytz
 from rich.console import Console, Group, RenderableType
 from rich.live import Live
 from rich.text import Text
+
+from data.reader import LOCKED_FILES
 
 from claude_monitor.core.calculations import calculate_hourly_burn_rate
 from claude_monitor.core.models import normalize_model_name
@@ -299,7 +302,21 @@ class DisplayController:
             )
             return self.buffer_manager.create_screen_renderable(screen_buffer)
 
-        return self.buffer_manager.create_screen_renderable(screen_buffer)
+        renderable = self.buffer_manager.create_screen_renderable(screen_buffer)
+
+        # Show active-session indicator when Claude Code holds a write lock on a
+        # JSONL file (WinError 32 / PermissionError).  The locked file is excluded
+        # from this refresh cycle so its token counts are not yet visible.
+        # See data/reader.py LOCKED_FILES and D-05 in 01-CONTEXT.md.
+        if LOCKED_FILES:
+            locked_note = Text(
+                f"(active session — data not yet visible: "
+                f"{len(LOCKED_FILES)} file(s) locked by Claude Code)",
+                style="dim yellow",
+            )
+            return Group(renderable, locked_note)
+
+        return renderable
 
     def _process_active_session_data(
         self,
