@@ -1,17 +1,18 @@
-"""claude_monitor namespace shim.
+"""claude_monitor namespace shim — meta-path finder (Python 3.12 compatible).
 
-This package provides the `claude_monitor` namespace so that upstream import
-statements (e.g. `from claude_monitor.data.reader import ...`) resolve correctly
-when running from the repo root without an editable install.
+Installs a sys.meta_path finder using the modern find_spec / exec_module API
+(find_module was silently dropped in CPython 3.12) that redirects any
+``import claude_monitor.X.Y.Z`` to ``import X.Y.Z``.
 
-All real source modules live at the repo root level (data/, core/, monitoring/,
-ui/, cli/, terminal/, utils/).  This __init__.py registers them under the
-claude_monitor.* namespace by aliasing sys.modules entries.
+This lets the upstream source (which uses ``from claude_monitor.data.reader
+import ...`` everywhere) work correctly when all modules live flat at the repo
+root, without an editable install and without eager circular imports.
 """
 
 import importlib
+import importlib.abc
+import importlib.machinery
 import sys
-import types
 from pathlib import Path
 
 # Ensure the repo root is on sys.path so flat imports resolve.
@@ -23,56 +24,51 @@ from _version import __version__  # noqa: E402
 
 __all__ = ["__version__"]
 
-# Sub-packages to alias under the claude_monitor namespace.
-_SUBPACKAGES = [
-    "data",
-    "core",
-    "monitoring",
-    "ui",
-    "cli",
-    "terminal",
-    "utils",
-]
-
-# Modules that live at the repo root (not in a sub-package).
-_ROOT_MODULES = [
-    "error_handling",
-    "_version",
-]
+_PREFIX = "claude_monitor."
+_PREFIX_LEN = len(_PREFIX)
 
 
-def _register_aliases() -> None:
-    """Register flat modules under the claude_monitor.* namespace."""
-    pkg = sys.modules[__name__]
+class _ClaudeMonitorLoader(importlib.abc.Loader):
+    """Load a claude_monitor.X.Y module by importing X.Y instead."""
 
-    # Register root-level modules as claude_monitor.<name>
-    for mod_name in _ROOT_MODULES:
-        fq_name = f"claude_monitor.{mod_name}"
-        if fq_name not in sys.modules:
-            try:
-                mod = importlib.import_module(mod_name)
-                sys.modules[fq_name] = mod
-            except ImportError:
-                pass
+    def __init__(self, flat_name: str) -> None:
+        self._flat_name = flat_name
 
-    # Register sub-packages and their children as claude_monitor.<pkg>.*
-    for sub in _SUBPACKAGES:
-        fq_sub = f"claude_monitor.{sub}"
-        if fq_sub not in sys.modules:
-            try:
-                mod = importlib.import_module(sub)
-                sys.modules[fq_sub] = mod
-                setattr(pkg, sub, mod)
-            except ImportError:
-                pass
+    def create_module(self, spec):  # noqa: ANN001
+        """Return the flat module so both names share one object."""
+        flat = importlib.import_module(self._flat_name)
+        # Register under the claude_monitor.* name so Python's machinery
+        # finds it in sys.modules on the next lookup.
+        sys.modules[spec.name] = flat
+        return flat
 
-        # Walk already-imported sub-modules and alias them.
-        prefix = f"{sub}."
-        for key, value in list(sys.modules.items()):
-            if key.startswith(prefix) and not key.startswith("claude_monitor."):
-                alias = f"claude_monitor.{key}"
-                if alias not in sys.modules:
-                    sys.modules[alias] = value
+    def exec_module(self, module) -> None:  # noqa: ANN001
+        """No-op: create_module already populated the module."""
 
 
-_register_aliases()
+class _ClaudeMonitorFinder(importlib.abc.MetaPathFinder):
+    """Intercept ``claude_monitor.X.Y`` imports and redirect to ``X.Y``."""
+
+    def find_spec(self, fullname: str, path, target=None):  # noqa: ANN001
+        if not fullname.startswith(_PREFIX):
+            return None
+        flat_name = fullname[_PREFIX_LEN:]
+        # Return a spec backed by our loader.
+        return importlib.machinery.ModuleSpec(
+            fullname,
+            _ClaudeMonitorLoader(flat_name),
+            is_package=self._is_package(flat_name),
+        )
+
+    @staticmethod
+    def _is_package(name: str) -> bool:
+        try:
+            spec = importlib.util.find_spec(name)
+            return spec is not None and spec.submodule_search_locations is not None
+        except (ModuleNotFoundError, ValueError):
+            return False
+
+
+# Install once — guard against double-installation on reload.
+if not any(isinstance(f, _ClaudeMonitorFinder) for f in sys.meta_path):
+    sys.meta_path.insert(0, _ClaudeMonitorFinder())
