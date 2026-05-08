@@ -265,6 +265,51 @@ class SessionDisplayComponent:
             screen_buffer.append(
                 f"💲 [value]Cost Rate:[/]              {cost_per_min_display} [dim]$/min[/]"
             )
+
+            # Phase 2: Threshold Detection rows (D-05, D-06, D-07, D-08, D-09)
+            threshold_state = kwargs.get("threshold_state")
+            if threshold_state is not None:
+                screen_buffer.append(f"[separator]{'─' * 60}[/]")
+
+                if threshold_state.status == "calibrating":
+                    # D-05: show calibration progress, no false overage warnings (D-06)
+                    screen_buffer.append(
+                        f"🎯 [value]Token limit:[/]          "
+                        f"[dim]Calibrating ({threshold_state.completed_session_count}/10 sessions)[/]"
+                    )
+                    # D-06: INCLUDED/OVERAGE row suppressed entirely during calibration
+                elif threshold_state.status == "auto":
+                    # D-07: show P90-inferred value
+                    screen_buffer.append(
+                        f"🎯 [value]Token limit:[/]          "
+                        f"[info]{threshold_state.threshold_tokens:,} tokens[/] [dim](P90)[/]"
+                    )
+                    # D-09: status row present when threshold is known
+                    tokens_used_val = kwargs.get("tokens_used", tokens_used)
+                    if tokens_used_val > threshold_state.threshold_tokens:
+                        screen_buffer.append(
+                            "🔴 [error]Status:[/]               [error]OVERAGE[/]"
+                        )
+                    else:
+                        screen_buffer.append(
+                            "✅ [success]Status:[/]              [success]INCLUDED[/]"
+                        )
+                else:  # manual
+                    # D-08: show manually-configured value
+                    screen_buffer.append(
+                        f"🎯 [value]Token limit:[/]          "
+                        f"[info]{threshold_state.threshold_tokens:,} tokens[/] [dim](manual)[/]"
+                    )
+                    # D-09: status row present when threshold is known
+                    tokens_used_val = kwargs.get("tokens_used", tokens_used)
+                    if tokens_used_val > threshold_state.threshold_tokens:
+                        screen_buffer.append(
+                            "🔴 [error]Status:[/]               [error]OVERAGE[/]"
+                        )
+                    else:
+                        screen_buffer.append(
+                            "✅ [success]Status:[/]              [success]INCLUDED[/]"
+                        )
         else:
             cost_display = CostIndicator.render(session_cost)
             cost_per_min = (
