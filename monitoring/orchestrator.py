@@ -6,6 +6,7 @@ import time
 from typing import Any, Callable, Dict, List, Optional
 
 from claude_monitor.core.plans import DEFAULT_TOKEN_LIMIT, get_token_limit
+from claude_monitor.core.threshold_manager import ThresholdState, get_threshold
 from claude_monitor.error_handling import report_error
 from claude_monitor.monitoring.data_manager import DataManager
 from claude_monitor.monitoring.session_monitor import SessionMonitor
@@ -169,10 +170,26 @@ class MonitoringOrchestrator:
             # Calculate token limit
             token_limit: int = self._calculate_token_limit(data)
 
+            # Phase 2: compute threshold state (cold-start / P90 auto / manual override)
+            # Only runs for custom plan; other plans have static limits with no P90 calibration.
+            blocks: List[Any] = data.get("blocks", [])
+            if getattr(self._args, "plan", "pro") == "custom":
+                threshold_state: ThresholdState = get_threshold(blocks)
+                # D-pitfall-5: keep token_limit as int for backward compat with progress bar math.
+                # During calibration, use DEFAULT_TOKEN_LIMIT so percentage calculations don't
+                # divide by zero or show misleading values. For auto/manual, use the real threshold.
+                if threshold_state.status == "calibrating":
+                    token_limit = DEFAULT_TOKEN_LIMIT
+                elif threshold_state.threshold_tokens is not None:
+                    token_limit = threshold_state.threshold_tokens
+            else:
+                threshold_state = None
+
             # Prepare monitoring data
             monitoring_data: Dict[str, Any] = {
                 "data": data,
-                "token_limit": token_limit,
+                "token_limit": token_limit,           # int — kept for backward compat
+                "threshold_state": threshold_state,   # ThresholdState | None — new in Phase 2
                 "args": self._args,
                 "session_id": self.session_monitor.current_session_id,
                 "session_count": self.session_monitor.session_count,
