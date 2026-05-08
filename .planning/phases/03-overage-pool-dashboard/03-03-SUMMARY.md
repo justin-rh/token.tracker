@@ -78,7 +78,7 @@ Guarded: `if elapsed_session_minutes > 0` before computing rate; `if burn_rate_p
 | Task | Type | Description | Commit |
 |------|------|-------------|--------|
 | 1 | auto | Insert pool dashboard rows block in session_display.py after Phase 2 threshold block | f125d49 |
-| 2 | checkpoint:human-verify | Visual verification of pool dashboard in live terminal | PENDING |
+| 2 | checkpoint:human-verify | Visual verification of pool dashboard in live terminal | APPROVED (human-verified 2026-05-08) |
 
 ## Acceptance Criteria Verified (Task 1)
 
