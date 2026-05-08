@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-02-PLAN.md — ThresholdManager wired into orchestrator monitoring_data
-last_updated: "2026-05-08T18:54:02Z"
+stopped_at: Completed 02-03-PLAN.md — Threshold display rows wired into session_display
+last_updated: "2026-05-08T18:59:00Z"
 last_activity: 2026-05-08
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 8
-  completed_plans: 7
-  percent: 88
+  completed_plans: 8
+  percent: 100
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-05-07)
 
 ## Current Position
 
-Phase: 2 of 3 (Threshold Detection)
-Plan: 3 of 3 in current phase (next)
-Status: Phase 2 In Progress — Plan 2 Complete
+Phase: 2 of 3 (Threshold Detection) — COMPLETE
+Plan: 3 of 3 in current phase (done)
+Status: Phase 2 Complete — Ready for Phase 3
 Last activity: 2026-05-08
 
-Progress: [█████████░] 88%
+Progress: [██████████] 100% (Phases 1-2 complete)
 
 ## Performance Metrics
 
@@ -45,7 +45,7 @@ Progress: [█████████░] 88%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-windows-foundation | 5/5 | ~21 min | 4 min |
-| 02-threshold-detection | 2/3 | ~5 min | 2.5 min |
+| 02-threshold-detection | 3/3 | ~6 min | 2 min |
 
 **Recent Trend:**
 
@@ -86,6 +86,9 @@ Recent decisions affecting current work:
 - [02-02] threshold_state=None for non-custom plans — avoids conditional logic in all callers; None is unambiguous "not applicable"
 - [02-02] token_limit overridden from ThresholdManager for custom plan — supersedes bare P90 call that had no cold-start guard
 - [02-02] ThresholdManager call placed after _calculate_token_limit() — fallback int already set before override logic runs
+- [02-03] threshold_state read via kwargs.get() in session_display — avoids adding positional param to 21-param signature
+- [02-03] tokens_used_val falls back to positional tokens_used param — no double kwargs.get() needed
+- [02-03] Separator line added before threshold rows — visually groups new Phase 2 section from existing metrics block
 
 ### Pending Todos
 
@@ -107,5 +110,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-05-08
-Stopped at: Completed 02-02-PLAN.md — ThresholdManager wired into orchestrator monitoring_data
+Stopped at: Completed 02-03-PLAN.md — Threshold display rows wired into session_display
 Resume file: None
