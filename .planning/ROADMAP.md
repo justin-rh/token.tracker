@@ -65,7 +65,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Create core/pool_state_manager.py (PoolState dataclass + compute_pool_state() + full unit tests)
+- [x] 03-01-PLAN.md — Create core/pool_state_manager.py (PoolState dataclass + compute_pool_state() + full unit tests)
 - [ ] 03-02-PLAN.md — Wire pool_state through orchestrator → display_controller → cli/main.py
 - [ ] 03-03-PLAN.md — Render pool dashboard rows in ui/session_display.py (pool spend, progress bar, burn rate)
 
@@ -78,4 +78,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Windows Foundation | 5/5 | Complete | 2026-05-08 |
 | 2. Threshold Detection | 3/3 | Complete | 2026-05-08 |
-| 3. Overage Pool Dashboard | 0/3 | Not started | - |
+| 3. Overage Pool Dashboard | 1/3 | In progress | - |

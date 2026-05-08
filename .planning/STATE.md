@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-03-PLAN.md — Threshold display rows wired into session_display
-last_updated: "2026-05-08T18:59:00Z"
+stopped_at: Completed 03-01-PLAN.md — core/pool_state_manager.py with 14 passing tests
+last_updated: "2026-05-08T20:00:00Z"
 last_activity: 2026-05-08
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 8
-  completed_plans: 8
-  percent: 100
+  total_plans: 11
+  completed_plans: 9
+  percent: 82
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-05-07)
 
 ## Current Position
 
-Phase: 2 of 3 (Threshold Detection) — COMPLETE
-Plan: 3 of 3 in current phase (done)
-Status: Phase 2 Complete — Ready for Phase 3
+Phase: 3 of 3 (Overage Pool Dashboard) — IN PROGRESS
+Plan: 1 of 3 in current phase (done)
+Status: Phase 3 Plan 1 Complete — Ready for Plan 2 (orchestrator wiring)
 Last activity: 2026-05-08
 
-Progress: [██████████] 100% (Phases 1-2 complete)
+Progress: [████████░░] 82% (Phases 1-2 complete, Phase 3 plan 1/3 done)
 
 ## Performance Metrics
 
@@ -46,10 +46,11 @@ Progress: [██████████] 100% (Phases 1-2 complete)
 |-------|-------|-------|----------|
 | 01-windows-foundation | 5/5 | ~21 min | 4 min |
 | 02-threshold-detection | 3/3 | ~6 min | 2 min |
+| 03-overage-pool-dashboard | 1/3 | ~2 min | 2 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 01-01, 01-02, 01-03, 01-04, 01-05
+- Last 5 plans: 01-03, 01-04, 01-05, 02-01, 03-01
 - Trend: On track
 
 *Updated after each plan completion*
@@ -89,6 +90,9 @@ Recent decisions affecting current work:
 - [02-03] threshold_state read via kwargs.get() in session_display — avoids adding positional param to 21-param signature
 - [02-03] tokens_used_val falls back to positional tokens_used param — no double kwargs.get() needed
 - [02-03] Separator line added before threshold rows — visually groups new Phase 2 section from existing metrics block
+- [03-01] PoolState.is_overage reflects whether at least one OVERAGE session exists in billing period (not current session status)
+- [03-01] compute_pool_state() writes pool_spend.json on every call — crash resilience over startup-only writes
+- [03-01] Stale cache detection: cached billing_cycle_start < derived current cycle start → ignore cache, recompute from blocks
 
 ### Pending Todos
 
@@ -110,5 +114,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-05-08
-Stopped at: Completed 02-03-PLAN.md — Threshold display rows wired into session_display
+Stopped at: Completed 03-01-PLAN.md — core/pool_state_manager.py with 14 passing tests (TDD RED+GREEN)
 Resume file: None
