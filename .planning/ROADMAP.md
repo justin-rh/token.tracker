@@ -45,7 +45,12 @@ Plans:
   1. On first run with fewer than 10 sessions, the dashboard shows "Calibrating (N/10 sessions)" — no false overage warnings trigger
   2. After 10 or more sessions of history, a P90 token threshold is displayed and overage detection activates
   3. Setting `overage_threshold_tokens` in config bypasses P90 and the dashboard shows "threshold: manual" — P90 calibration is skipped
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Create core/threshold_manager.py (ThresholdState dataclass + get_threshold() with full unit tests)
+- [ ] 02-02-PLAN.md — Wire ThresholdManager into monitoring/orchestrator.py (add threshold_state to monitoring_data)
+- [ ] 02-03-PLAN.md — Render threshold rows in ui/session_display.py (calibrating/auto/manual + INCLUDED/OVERAGE status)
 
 ### Phase 3: Overage Pool Dashboard
 **Goal**: Users can see at a glance whether current usage is on included tokens or burning the $500 pool, how much of the pool has been spent, and how long the pool will last at the current burn rate
@@ -68,5 +73,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Windows Foundation | 5/5 | Complete | 2026-05-08 |
-| 2. Threshold Detection | 0/TBD | Not started | - |
+| 2. Threshold Detection | 0/3 | Not started | - |
 | 3. Overage Pool Dashboard | 0/TBD | Not started | - |
