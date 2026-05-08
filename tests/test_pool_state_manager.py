@@ -269,3 +269,61 @@ def test_pool_pct_spent_calculation(tmp_path):
     assert result.pool_size_usd == pytest.approx(500.0)
     assert result.pool_pct_spent == pytest.approx(20.0)
     assert result.pool_remaining_usd == pytest.approx(400.0)
+
+
+# ---------------------------------------------------------------------------
+# Test 15: Seed USD added to computed OVERAGE spend
+# ---------------------------------------------------------------------------
+
+def test_seed_usd_added_to_computed_spend(tmp_path):
+    """Seed of $47.23 plus one OVERAGE session of $5.00 → pool_spend_usd==52.23."""
+    today = date.today().isoformat()
+    config_file = tmp_path / "config.json"
+    config_file.write_text(json.dumps({
+        "pool_spend_seed_usd": 47.23,
+        "pool_spend_seed_date": today,
+    }))
+
+    blocks = [make_block(tokens=100_000, cost=5.00, start_time=today + "T15:00:00")]
+    result = compute_pool_state(blocks, KNOWN_STATE, config_dir=tmp_path)
+
+    assert result.pool_spend_usd == pytest.approx(52.23)
+
+
+# ---------------------------------------------------------------------------
+# Test 16: seed_date excludes pre-seed sessions from log computation
+# ---------------------------------------------------------------------------
+
+def test_seed_date_excludes_pre_seed_sessions(tmp_path):
+    """Sessions before seed_date are covered by the seed — not double-counted from logs."""
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    today = date.today().isoformat()
+    config_file = tmp_path / "config.json"
+    config_file.write_text(json.dumps({
+        "pool_spend_seed_usd": 20.00,
+        "pool_spend_seed_date": today,
+    }))
+
+    # Yesterday's OVERAGE session — should be excluded (covered by seed)
+    blocks = [make_block(tokens=100_000, cost=10.00, start_time=yesterday + "T10:00:00")]
+    result = compute_pool_state(blocks, KNOWN_STATE, config_dir=tmp_path)
+
+    # Only seed contributes — yesterday's session is excluded
+    assert result.pool_spend_usd == pytest.approx(20.00)
+
+
+# ---------------------------------------------------------------------------
+# Test 17: Malformed seed_usd — warning logged, default 0.0 used
+# ---------------------------------------------------------------------------
+
+def test_malformed_seed_usd_logs_warning_and_uses_default(tmp_path, caplog):
+    """pool_spend_seed_usd='bad' → WARNING, seed treated as 0.0."""
+    config_file = tmp_path / "config.json"
+    config_file.write_text(json.dumps({"pool_spend_seed_usd": "bad"}))
+
+    blocks = []
+    with caplog.at_level(logging.WARNING, logger="core.pool_state_manager"):
+        result = compute_pool_state(blocks, KNOWN_STATE, config_dir=tmp_path)
+
+    assert "pool_spend_seed_usd" in caplog.text
+    assert result.pool_spend_usd == pytest.approx(0.0)

@@ -18,7 +18,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -37,22 +37,29 @@ class PoolState:
     is_overage: bool            # True when at least one OVERAGE session exists in period
 
 
-def _read_pool_config(config_dir: Path) -> tuple[float, int]:
-    """Read pool_size_usd and billing_cycle_start_day from config.json.
+def _read_pool_config(config_dir: Path) -> Tuple[float, int, float, Optional[date]]:
+    """Read pool config from config.json.
 
-    Mirrors _read_manual_override() from threshold_manager.py exactly.
-    Returns (pool_size_usd, billing_cycle_start_day) with defaults on missing/invalid.
+    Returns (pool_size_usd, billing_cycle_start_day, pool_spend_seed_usd, pool_spend_seed_date).
 
-    Validation rules (D-07/D-08):
-      pool_size_usd: must be positive int or float → default 500.0
-      billing_cycle_start_day: must be int 1–28 → default 1
+    pool_spend_seed_usd: dollar amount from Anthropic billing dashboard as of seed_date.
+    pool_spend_seed_date: date the seed was set — only log sessions AFTER this date are
+        added to the seed (sessions before are already covered by the seed value).
+
+    Validation rules:
+      pool_size_usd: positive int or float → default 500.0
+      billing_cycle_start_day: int 1–28 → default 1
+      pool_spend_seed_usd: non-negative float → default 0.0
+      pool_spend_seed_date: ISO date string "YYYY-MM-DD" → default None
     """
     pool_size = 500.0
     cycle_day = 1
+    seed_usd = 0.0
+    seed_date: Optional[date] = None
 
     config_file = config_dir / "config.json"
     if not config_file.exists():
-        return pool_size, cycle_day
+        return pool_size, cycle_day, seed_usd, seed_date
 
     try:
         with open(config_file, encoding="utf-8") as f:
@@ -76,10 +83,29 @@ def _read_pool_config(config_dir: Path) -> tuple[float, int]:
                 raw_day,
             )
 
+        raw_seed = data.get("pool_spend_seed_usd")
+        if isinstance(raw_seed, (int, float)) and raw_seed >= 0:
+            seed_usd = float(raw_seed)
+        elif raw_seed is not None:
+            logger.warning(
+                "config.json: pool_spend_seed_usd=%r is not a non-negative number — using default 0.0",
+                raw_seed,
+            )
+
+        raw_seed_date = data.get("pool_spend_seed_date")
+        if isinstance(raw_seed_date, str):
+            try:
+                seed_date = date.fromisoformat(raw_seed_date)
+            except ValueError:
+                logger.warning(
+                    "config.json: pool_spend_seed_date=%r is not a valid ISO date (YYYY-MM-DD) — ignoring",
+                    raw_seed_date,
+                )
+
     except Exception as exc:
         logger.warning("Failed to read config.json for pool settings: %s", exc)
 
-    return pool_size, cycle_day
+    return pool_size, cycle_day, seed_usd, seed_date
 
 
 def _derive_billing_cycle_start(cycle_day: int) -> date:
@@ -193,7 +219,7 @@ def compute_pool_state(
         config_dir = _DEFAULT_CONFIG_DIR
 
     # Read pool configuration from config.json (D-07/D-08)
-    pool_size_usd, cycle_day = _read_pool_config(config_dir)
+    pool_size_usd, cycle_day, seed_usd, seed_date = _read_pool_config(config_dir)
 
     # Determine billing cycle start — check cache first (D-06, Pitfall 4)
     current_cycle_start = _derive_billing_cycle_start(cycle_day)
@@ -220,14 +246,20 @@ def compute_pool_state(
     if threshold_state is not None:
         threshold_tokens = threshold_state.threshold_tokens
 
-    # Sum OVERAGE session costs in billing period (D-01, D-02, D-03)
-    pool_spend_usd = 0.0
+    # When a seed is set, only count log sessions after seed_date — sessions before
+    # are already captured by pool_spend_seed_usd from the Anthropic billing dashboard.
+    log_cutoff: date = cycle_start
+    if seed_date is not None and seed_date > cycle_start:
+        log_cutoff = seed_date
+
+    # Sum OVERAGE session costs since log_cutoff (D-01, D-02, D-03)
+    pool_spend_usd = seed_usd
     for block in blocks:
         # Skip active and gap blocks — only completed sessions count (D-01)
         if block.get("isActive", False) or block.get("isGap", False):
             continue
-        # Skip sessions outside the current billing period
-        if not _in_billing_period(block.get("startTime", ""), cycle_start):
+        # Skip sessions before the log cutoff (billing period start or seed date)
+        if not _in_billing_period(block.get("startTime", ""), log_cutoff):
             continue
         # OVERAGE classification: totalTokens > threshold_tokens
         if _classify_overage(block, threshold_tokens):
