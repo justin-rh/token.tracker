@@ -37,6 +37,43 @@ logger = logging.getLogger(__name__)
 LOCKED_FILES: List[Path] = []
 
 
+def _deduplicate_entries(entries: list) -> list:
+    """
+    Collapse streaming placeholder entries by requestId.
+    Claude Code writes 2-10 JSONL entries per API request during streaming.
+    All share the same requestId. The final entry has the true output_tokens count.
+    Selecting max(output_tokens) per requestId gives the correct final entry.
+
+    Entries without a requestId field are passed through unchanged (tool-use results,
+    system messages, etc. — these are not streaming API entries).
+
+    This is the fix for the 100-174x token inflation bug (PITFALLS.md, GitHub #22686).
+    Strategy: max(output_tokens) per requestId (final streaming chunk).
+    """
+    keyed: dict = {}  # requestId -> best entry so far
+
+    no_request_id = []
+    for entry in entries:
+        rid = entry.get("requestId") or entry.get("request_id")
+        if rid is None:
+            no_request_id.append(entry)
+            continue
+
+        existing = keyed.get(rid)
+        if existing is None:
+            keyed[rid] = entry
+        else:
+            # Keep the entry with higher output_tokens (final streaming chunk)
+            existing_out = (
+                existing.get("message", {}).get("usage", {}).get("output_tokens", 0)
+            )
+            new_out = entry.get("message", {}).get("usage", {}).get("output_tokens", 0)
+            if new_out > existing_out:
+                keyed[rid] = entry
+
+    return list(keyed.values()) + no_request_id
+
+
 def _get_default_claude_projects_path() -> Path:
     """Return the Claude Code projects directory for Windows.
 
@@ -181,36 +218,51 @@ def _process_single_file(
         entries_filtered = 0
         entries_mapped = 0
 
+        # Collect all raw JSON entries from this file first, before any processing.
+        # Deduplication by requestId (max output_tokens strategy) must happen on the
+        # complete set of entries for a file — not line-by-line — so we read all lines
+        # into raw_parsed, then deduplicate, then map to UsageEntry objects.
+        raw_parsed: List[Dict[str, Any]] = []
         with open(file_path, encoding="utf-8-sig", newline="") as f:
             for line in f:
                 line = line.strip()
                 if not line:
                     continue
-
                 try:
                     data = json.loads(line)
                     entries_read += 1
-
-                    if not _should_process_entry(
-                        data, cutoff_time, processed_hashes, timezone_handler
-                    ):
-                        entries_filtered += 1
-                        continue
-
-                    entry = _map_to_usage_entry(
-                        data, mode, timezone_handler, pricing_calculator
-                    )
-                    if entry:
-                        entries_mapped += 1
-                        entries.append(entry)
-                        _update_processed_hashes(data, processed_hashes)
-
-                    if include_raw:
-                        raw_data.append(data)
-
+                    raw_parsed.append(data)
                 except json.JSONDecodeError as e:
                     logger.debug(f"Failed to parse JSON line in {file_path}: {e}")
                     continue
+
+        # Deduplicate by requestId (max output_tokens = final streaming chunk).
+        # This collapses the 2-10 streaming placeholder entries per API request into
+        # one correct entry, preventing 100-174x token count inflation (PITFALLS.md).
+        deduped_parsed = _deduplicate_entries(raw_parsed)
+        logger.debug(
+            f"File {file_path.name}: {entries_read} read, "
+            f"{len(deduped_parsed)} after requestId dedup "
+            f"({entries_read - len(deduped_parsed)} duplicates removed)"
+        )
+
+        for data in deduped_parsed:
+            if not _should_process_entry(
+                data, cutoff_time, processed_hashes, timezone_handler
+            ):
+                entries_filtered += 1
+                continue
+
+            entry = _map_to_usage_entry(
+                data, mode, timezone_handler, pricing_calculator
+            )
+            if entry:
+                entries_mapped += 1
+                entries.append(entry)
+                _update_processed_hashes(data, processed_hashes)
+
+            if include_raw:
+                raw_data.append(data)
 
         logger.debug(
             f"File {file_path.name}: {entries_read} read, "
