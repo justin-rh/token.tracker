@@ -193,6 +193,7 @@ def _run_monitoring(args: argparse.Namespace) -> None:
                         args,
                         monitoring_data.get("token_limit", token_limit),
                         threshold_state=monitoring_data.get("threshold_state"),
+                        pool_state=monitoring_data.get("pool_state"),          # Phase 3 NEW
                     )
 
                     if live_display:

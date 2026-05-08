@@ -18,6 +18,7 @@ from data.reader import LOCKED_FILES
 
 from claude_monitor.core.calculations import calculate_hourly_burn_rate
 from claude_monitor.core.threshold_manager import ThresholdState
+from claude_monitor.core.pool_state_manager import PoolState
 from claude_monitor.core.models import normalize_model_name
 from claude_monitor.core.plans import Plans
 from claude_monitor.ui.components import (
@@ -204,7 +205,8 @@ class DisplayController:
         data: Dict[str, Any],
         args: Any,
         token_limit: int,
-        threshold_state: Optional[ThresholdState] = None,  # new in Phase 2
+        threshold_state: Optional[ThresholdState] = None,  # Phase 2
+        pool_state: Optional[PoolState] = None,             # Phase 3 NEW
     ) -> RenderableType:
         """Create display renderable from data.
 
@@ -279,6 +281,8 @@ class DisplayController:
 
         # Phase 2: pass threshold_state through to session_display via kwargs
         processed_data["threshold_state"] = threshold_state
+        # Phase 3: pass pool_state through to session_display via kwargs
+        processed_data["pool_state"] = pool_state
 
         try:
             screen_buffer = self.session_display.format_active_session_screen(
