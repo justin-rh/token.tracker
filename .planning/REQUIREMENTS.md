@@ -59,11 +59,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PORT-01 | Phase 1 — Windows Foundation | Pending |
+| PORT-01 | Phase 1 — Windows Foundation | In progress (01-01: baseline established; path fix in 01-02) |
 | PORT-02 | Phase 1 — Windows Foundation | Pending |
 | PORT-03 | Phase 1 — Windows Foundation | Pending |
 | PORT-04 | Phase 1 — Windows Foundation | Pending |
-| DISP-01 | Phase 1 — Windows Foundation | Pending |
+| DISP-01 | Phase 1 — Windows Foundation | In progress (01-01: upstream live display infrastructure present) |
 | THRS-01 | Phase 2 — Threshold Detection | Pending |
 | THRS-02 | Phase 2 — Threshold Detection | Pending |
 | THRS-03 | Phase 2 — Threshold Detection | Pending |

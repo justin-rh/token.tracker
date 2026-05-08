@@ -31,7 +31,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 5 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Fork upstream and bootstrap project structure (pyproject.toml, monitor.py entry point)
+- [x] 01-01-PLAN.md — Fork upstream and bootstrap project structure (pyproject.toml, monitor.py entry point)
 - [ ] 01-02-PLAN.md — Windows path fix (APPDATA) and file-lock handling (PermissionError / WinError 32)
 - [ ] 01-03-PLAN.md — requestId deduplication with unit tests
 - [ ] 01-04-PLAN.md — Replace costUSD with statusline.jsonl cost source
@@ -67,6 +67,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Windows Foundation | 0/5 | Not started | - |
+| 1. Windows Foundation | 1/5 | In progress | - |
 | 2. Threshold Detection | 0/TBD | Not started | - |
 | 3. Overage Pool Dashboard | 0/TBD | Not started | - |
