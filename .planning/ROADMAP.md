@@ -28,7 +28,14 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Cost figures are sourced from statusline.jsonl `cost.total_cost_usd`, not the removed `costUSD` JSONL field
   4. Dashboard renders at full terminal width in Windows Terminal with no 80-column wrapping or encoding errors
   5. Live display updates at the configured refresh rate without scrolling instead of refreshing in place
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Fork upstream and bootstrap project structure (pyproject.toml, monitor.py entry point)
+- [ ] 01-02-PLAN.md — Windows path fix (APPDATA) and file-lock handling (PermissionError / WinError 32)
+- [ ] 01-03-PLAN.md — requestId deduplication with unit tests
+- [ ] 01-04-PLAN.md — Replace costUSD with statusline.jsonl cost source
+- [ ] 01-05-PLAN.md — Rich Console width fix, VTP setup, active-session indicator, smoke test checkpoint
 
 ### Phase 2: Threshold Detection
 **Goal**: The tool automatically infers the daily included-token limit from historical session data, displays a calibration state during cold start, and accepts a manual override when the exact limit is known
@@ -60,6 +67,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Windows Foundation | 0/TBD | Not started | - |
+| 1. Windows Foundation | 0/5 | Not started | - |
 | 2. Threshold Detection | 0/TBD | Not started | - |
 | 3. Overage Pool Dashboard | 0/TBD | Not started | - |
