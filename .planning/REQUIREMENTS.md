@@ -64,9 +64,9 @@
 | PORT-03 | Phase 1 — Windows Foundation | Pending |
 | PORT-04 | Phase 1 — Windows Foundation | Pending |
 | DISP-01 | Phase 1 — Windows Foundation | In progress (01-01: upstream live display infrastructure present) |
-| THRS-01 | Phase 2 — Threshold Detection | Pending |
-| THRS-02 | Phase 2 — Threshold Detection | Pending |
-| THRS-03 | Phase 2 — Threshold Detection | Pending |
+| THRS-01 | Phase 2 — Threshold Detection | In progress (02-01: get_threshold() implemented; 02-02: wired into orchestrator monitoring_data) |
+| THRS-02 | Phase 2 — Threshold Detection | In progress (02-01: calibrating status in ThresholdState; 02-02: token_limit=DEFAULT during calibration in orchestrator) |
+| THRS-03 | Phase 2 — Threshold Detection | In progress (02-01: manual override via config.json; 02-02: threshold_state passed to monitoring_data) |
 | OVGE-01 | Phase 3 — Overage Pool Dashboard | Pending |
 | OVGE-02 | Phase 3 — Overage Pool Dashboard | Pending |
 | OVGE-03 | Phase 3 — Overage Pool Dashboard | Pending |

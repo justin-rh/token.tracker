@@ -1,3 +1,19 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: executing
+stopped_at: Completed 02-02-PLAN.md — ThresholdManager wired into orchestrator monitoring_data
+last_updated: "2026-05-08T18:54:02Z"
+last_activity: 2026-05-08
+progress:
+  total_phases: 3
+  completed_phases: 1
+  total_plans: 8
+  completed_plans: 7
+  percent: 88
+---
+
 # Project State
 
 ## Project Reference
@@ -10,15 +26,16 @@ See: .planning/PROJECT.md (updated 2026-05-07)
 ## Current Position
 
 Phase: 2 of 3 (Threshold Detection)
-Plan: 1 of 3 in current phase
-Status: Phase 2 In Progress — Plan 1 Complete
-Last activity: 2026-05-08 — Completed 02-01-PLAN.md (ThresholdState dataclass and get_threshold())
+Plan: 3 of 3 in current phase (next)
+Status: Phase 2 In Progress — Plan 2 Complete
+Last activity: 2026-05-08
 
-Progress: [██████░░░░] 23%
+Progress: [█████████░] 88%
 
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 4
 - Average duration: 3.8 min
 - Total execution time: 0.2 hours
@@ -28,9 +45,10 @@ Progress: [██████░░░░] 23%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-windows-foundation | 5/5 | ~21 min | 4 min |
-| 02-threshold-detection | 1/3 | ~4 min | 4 min |
+| 02-threshold-detection | 2/3 | ~5 min | 2.5 min |
 
 **Recent Trend:**
+
 - Last 5 plans: 01-01, 01-02, 01-03, 01-04, 01-05
 - Trend: On track
 
@@ -65,6 +83,9 @@ Recent decisions affecting current work:
 - [02-01] Decision order D-04 > D-02 > D-01: manual override checked first, then cold-start guard, then P90
 - [02-01] camelCase keys (isGap, isActive, totalTokens) used throughout to match serialized dict format from data/analysis.py
 - [02-01] TypeError raised on SessionBlock object input — prevents silent wrong-type data corruption
+- [02-02] threshold_state=None for non-custom plans — avoids conditional logic in all callers; None is unambiguous "not applicable"
+- [02-02] token_limit overridden from ThresholdManager for custom plan — supersedes bare P90 call that had no cold-start guard
+- [02-02] ThresholdManager call placed after _calculate_token_limit() — fallback int already set before override logic runs
 
 ### Pending Todos
 
@@ -86,5 +107,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-05-08
-Stopped at: Completed 02-01-PLAN.md — ThresholdState + get_threshold() with 12 passing tests
+Stopped at: Completed 02-02-PLAN.md — ThresholdManager wired into orchestrator monitoring_data
 Resume file: None
