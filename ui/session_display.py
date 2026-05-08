@@ -310,6 +310,48 @@ class SessionDisplayComponent:
                         screen_buffer.append(
                             "✅ [success]Status:[/]              [success]INCLUDED[/]"
                         )
+
+            # Phase 3: Pool Dashboard rows (D-12, D-13, D-14; OVGE-01 through OVGE-04, DISP-02)
+            pool_state = kwargs.get("pool_state")
+            if (
+                pool_state is not None
+                and threshold_state is not None
+                and threshold_state.status != "calibrating"
+            ):
+                screen_buffer.append(f"[separator]{'─' * 60}[/]")
+
+                # Pool spend row — always shown when threshold is known (D-12, D-13, OVGE-02)
+                screen_buffer.append(
+                    f"🏦 [value]Pool spent:[/]   est. ${pool_state.pool_spend_usd:.2f} / ${pool_state.pool_size_usd:.2f}"
+                )
+
+                # Pool % remaining progress bar (D-14, OVGE-03)
+                # CRITICAL: pass pool_pct_SPENT (not remaining) so color escalates as pool depletes.
+                # _render_wide_progress_bar: green < 50%, yellow < 80%, red >= 80% of value passed.
+                pool_bar = self._render_wide_progress_bar(pool_state.pool_pct_spent)
+                pct_remaining = 100.0 - pool_state.pool_pct_spent
+                screen_buffer.append(
+                    f"   {pool_bar} {pct_remaining:.1f}% remaining"
+                )
+
+                # Burn rate + pool exhaustion — OVERAGE state only (D-11, OVGE-04)
+                if pool_state.is_overage:
+                    # session_cost and elapsed_session_minutes are positional params in scope
+                    burn_rate_per_hr = (
+                        (session_cost / max(1, elapsed_session_minutes)) * 60
+                        if elapsed_session_minutes > 0
+                        else 0.0
+                    )
+                    if burn_rate_per_hr > 0:
+                        remaining_hrs = pool_state.pool_remaining_usd / burn_rate_per_hr
+                        hours = int(remaining_hrs)
+                        mins = int((remaining_hrs - hours) * 60)
+                        exhaust_str = f"~{hours}h {mins}m remaining"
+                    else:
+                        exhaust_str = "—"
+                    screen_buffer.append(
+                        f"🔥 [value]Pool burn:[/]    est. ${burn_rate_per_hr:.2f}/hr — {exhaust_str}"
+                    )
         else:
             cost_display = CostIndicator.render(session_cost)
             cost_per_min = (
