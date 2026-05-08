@@ -15,8 +15,38 @@ from claude_monitor.core.models import (
     normalize_model_name,
 )
 from claude_monitor.utils.time_utils import TimezoneHandler
+from core.statusline_cost import read_statusline_costs
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_block_cost(block: SessionBlock, statusline_costs: dict) -> float:
+    """
+    Resolve cost for a SessionBlock.
+    Primary: statusline.jsonl cost.total_cost_usd (per D-06)
+    Fallback: sum of pricing-engine costs from the block's usage entries (per D-06 fallback)
+
+    SessionBlock does not carry a session_id field (blocks are time-window aggregates,
+    not 1:1 with Claude Code sessions). When statusline entries are keyed by session_id,
+    this lookup will always fall through to the pricing-engine fallback. If future work
+    adds session_id to SessionBlock (e.g., from JSONL sessionId field), the primary path
+    will start matching automatically. (See D-07: adapt if structure differs.)
+    """
+    # Try session_id match first
+    if hasattr(block, 'session_id') and block.session_id:
+        cost = statusline_costs.get(str(block.session_id))
+        if cost is not None:
+            return cost
+
+    # Try timestamp-based match: find statusline entry whose timestamp key
+    # matches the block's start_time ISO string (best-effort approximation).
+    start_key = block.start_time.isoformat() if block.start_time else None
+    if start_key and start_key in statusline_costs:
+        return statusline_costs[start_key]
+
+    # Fallback: return the pricing-engine computed cost_usd accumulated in the block.
+    # This preserves the reference tool's behavior when statusline has no matching entry.
+    return block.cost_usd
 
 
 class SessionAnalyzer:
@@ -44,6 +74,13 @@ class SessionAnalyzer:
         if not entries:
             return []
 
+        # Load statusline costs once per call (D-06: primary cost source).
+        # statusline.jsonl is written by Claude Code and contains server-reported
+        # cumulative cost per session — more accurate than raw token math.
+        # Falls back to pricing-engine cost when statusline has no matching entry.
+        # costUSD field in session JSONL is NOT used (removed in v1.0.9, per D-08).
+        statusline_costs = read_statusline_costs()  # dict: session_id/timestamp -> cost_usd
+
         blocks = []
         current_block = None
 
@@ -55,6 +92,8 @@ class SessionAnalyzer:
                 # Close current block
                 if current_block:
                     self._finalize_block(current_block)
+                    # Apply statusline cost as primary source (D-06)
+                    current_block.cost_usd = _resolve_block_cost(current_block, statusline_costs)
                     blocks.append(current_block)
 
                     # Check for gap
@@ -71,6 +110,8 @@ class SessionAnalyzer:
         # Finalize last block
         if current_block:
             self._finalize_block(current_block)
+            # Apply statusline cost as primary source (D-06)
+            current_block.cost_usd = _resolve_block_cost(current_block, statusline_costs)
             blocks.append(current_block)
 
         # Mark active blocks
