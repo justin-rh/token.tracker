@@ -10,27 +10,27 @@ See: .planning/PROJECT.md (updated 2026-05-07)
 ## Current Position
 
 Phase: 1 of 3 (Windows Foundation)
-Plan: 3 of 5 in current phase
+Plan: 4 of 5 in current phase
 Status: Executing
-Last activity: 2026-05-08 — Completed 01-03 (requestId Deduplication)
+Last activity: 2026-05-08 — Completed 01-04 (Replace costUSD with statusline.jsonl Cost Source)
 
-Progress: [███░░░░░░░] 6%
+Progress: [████░░░░░░] 8%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 4.3 min
+- Total plans completed: 4
+- Average duration: 3.8 min
 - Total execution time: 0.2 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-windows-foundation | 3/5 | 15 min | 5 min |
+| 01-windows-foundation | 4/5 | 16 min | 4 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01, 01-02, 01-03
+- Last 5 plans: 01-01, 01-02, 01-03, 01-04
 - Trend: On track
 
 *Updated after each plan completion*
@@ -54,6 +54,8 @@ Recent decisions affecting current work:
 - [01-02] utf-8-sig + newline='' on all JSONL opens: handles BOM and CRLF line endings without parse errors
 - [01-03] Collect all raw JSONL lines per file first, then deduplicate, then map — ensures max(output_tokens) selection works across full set of streaming chunks
 - [01-03] Existing _create_unique_hash() / processed_hashes dedup left in place as secondary guard against cross-file message_id duplicates (different concern)
+- [01-04] SessionBlock has no session_id field — statusline lookup falls through to pricing-engine fallback; adapt _extract_key() when real data structure known (D-07)
+- [01-04] _resolve_block_cost() added as module-level function in analyzer.py — separates cost resolution from block aggregation logic
 
 ### Pending Todos
 
@@ -75,5 +77,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-05-08
-Stopped at: Completed 01-03-PLAN.md — ready to execute 01-04
+Stopped at: Completed 01-04-PLAN.md — ready to execute 01-05
 Resume file: None
