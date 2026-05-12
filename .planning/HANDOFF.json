@@ -1,0 +1,81 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-05-12T22:15:00Z",
+  "phase": "03",
+  "phase_name": "overage-pool-dashboard",
+  "phase_dir": ".planning/phases/03-overage-pool-dashboard",
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "paused",
+  "completed_tasks": [
+    {
+      "id": 1,
+      "name": "Debug: pool rows missing from dashboard",
+      "status": "done",
+      "notes": "Root cause: DataManager hours_back=192 (8 days) only had 7 sessions, threshold_state=calibrating, pool section gate failed. Fix: orchestrator now passes hours_back=720 (30 days)."
+    },
+    {
+      "id": 2,
+      "name": "Fix: pool spend not updating in real-time",
+      "status": "done",
+      "notes": "Root cause: auto_seed_from_anthropic set seed_date=tomorrow so log_cutoff=tomorrow, excluding all of today's new sessions. Fix: store precise UTC datetime (pool_spend_seed_datetime) and use it as cutoff instead of date-only."
+    }
+  ],
+  "remaining_tasks": [
+    {
+      "id": 3,
+      "name": "Verify fixes with restart of python monitor.py",
+      "status": "not_started"
+    },
+    {
+      "id": 4,
+      "name": "Run test suite to confirm no regressions",
+      "status": "not_started"
+    },
+    {
+      "id": 5,
+      "name": "Commit all post-Friday uncommitted changes",
+      "status": "not_started"
+    }
+  ],
+  "blockers": [],
+  "human_actions_pending": [
+    {
+      "action": "Restart python monitor.py to verify both fixes work end-to-end",
+      "context": "Pool rows should now show (hours_back=720), and pool spend should update in real-time (datetime cutoff). Needs live confirmation.",
+      "blocking": false
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "hours_back=720 in MonitoringOrchestrator DataManager",
+      "rationale": "P90 threshold calibration needs >= 10 sessions; user had only 7 in the prior 8-day window. 30 days gives enough history without being excessive.",
+      "phase": "03"
+    },
+    {
+      "decision": "Store pool_spend_seed_datetime (UTC ISO) alongside pool_spend_seed_date",
+      "rationale": "Date-only cutoff (seed_date=tomorrow) excluded all of today's new sessions. Precise datetime means only sessions after the exact seed API call are excluded from log scan, enabling real-time updates.",
+      "phase": "03"
+    },
+    {
+      "decision": "Previous debug session fix (4->5 tuple early return) was valid but not the root cause",
+      "rationale": "config.json exists so early return never fired. Real issues were hours_back window and datetime precision.",
+      "phase": "03"
+    }
+  ],
+  "uncommitted_files": [
+    ".planning/STATE.md",
+    "cli/bootstrap.py",
+    "cli/main.py",
+    "core/models.py",
+    "core/pool_state_manager.py",
+    "core/usage_fetcher.py",
+    "data/analyzer.py",
+    "data/reader.py",
+    "monitoring/orchestrator.py",
+    "pyproject.toml"
+  ],
+  "next_action": "Restart python monitor.py and confirm: (1) pool rows appear (no longer stuck on calibrating), (2) pool spend updates as tokens are used. Then run pytest and commit all changes.",
+  "context_notes": "All Friday troubleshooting changes + two bug fixes from this session are uncommitted. The app entry point is python monitor.py (not python cli/main.py) — it reconfigures UTF-8 before Rich imports for correct emoji rendering on Windows."
+}
