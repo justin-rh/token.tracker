@@ -4,14 +4,14 @@ milestone: v2.0
 milestone_name: Web-Sourced Usage + System Tray
 status: executing
 stopped_at: ~
-last_updated: "2026-05-18T01:00:00.000Z"
+last_updated: "2026-05-18T23:39:29Z"
 last_activity: 2026-05-18
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 6
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 17
 ---
 
 # Project State
@@ -25,15 +25,15 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 
 ## Current Position
 
-Phase: Phase 4 — Web Data Foundation (ready to execute)
-Plan: —
-Status: Planning complete — 6 plans in 5 waves
-Last activity: 2026-05-18 — Phase 4 planned (6 plans, verification passed)
+Phase: Phase 4 — Web Data Foundation (executing)
+Plan: 04-02 (next)
+Status: Plan 04-01 complete — 1/6 plans done
+Last activity: 2026-05-18 — 04-01 complete (deps + WebUsageData)
 
 ## Progress Bar
 
 ```
-v2.0: [                              ] 0% (0/3 phases)
+v2.0: [=====                         ] 17% (1/6 plans, 0/3 phases)
 ```
 
 ## Accumulated Context
@@ -48,6 +48,7 @@ v2.0: [                              ] 0% (0/3 phases)
 - v2.0: Firefox-first cookie extraction; Chrome/Edge ABE (v127+) may block browser-cookie3; manual sessionKey paste is the guaranteed fallback
 - v2.0: Phase 4 MUST spike Cloudflare + cookie extraction on the actual machine before writing any parsing code
 - v2.0: curl_cffi is a conditional dep — add only if httpx is blocked by Cloudflare; do not pre-add
+- v2.0 04-01: plan_limit_tokens is Optional[int] — None for Teams/Enterprise where API returns monthly_limit in cents (not tokens)
 
 ### Architecture Notes
 
@@ -91,6 +92,6 @@ v2.0: [                              ] 0% (0/3 phases)
 
 ## Session Continuity
 
-Last session: 2026-05-18T00:00:00.000Z
-Stopped at: Roadmap complete
-Resume file: .planning/ROADMAP.md
+Last session: 2026-05-18T23:39:29Z
+Stopped at: Completed 04-01-PLAN.md
+Resume file: .planning/phases/04-web-data-foundation/04-02-PLAN.md

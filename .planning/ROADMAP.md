@@ -88,7 +88,7 @@ Plans:
 **Plans**: 6 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Add keyring/browser-cookie3/httpx dependencies + WebUsageData frozen dataclass
+- [x] 04-01-PLAN.md — Add keyring/browser-cookie3/httpx dependencies + WebUsageData frozen dataclass
 - [ ] 04-02-PLAN.md — usage_fetcher.py: Firefox extraction, keyring migration, _read_auth_cookies() refactor, fetch_web_usage(), _discover_org_id()
 - [ ] 04-03-PLAN.md — Create monitoring/web_poller.py (WebPoller daemon thread, 300s Event loop, thread-safe cache)
 - [ ] 04-04-PLAN.md — Orchestrator wire-up (set_web_poller, web_usage in monitoring_data) + display_controller kwarg pass-through
@@ -128,6 +128,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Windows Foundation | 5/5 | Complete | 2026-05-08 |
 | 2. Threshold Detection | 3/3 | Complete | 2026-05-08 |
 | 3. Overage Pool Dashboard | 3/3 | Complete | 2026-05-08 |
-| 4. Web Data Foundation | 0/6 | Not started | - |
+| 4. Web Data Foundation | 1/6 | In progress | - |
 | 5. System Tray | 0/TBD | Not started | - |
 | 6. Per-Project Breakdown | 0/TBD | Not started | - |
