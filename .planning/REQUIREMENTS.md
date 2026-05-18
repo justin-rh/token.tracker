@@ -106,28 +106,28 @@
 | OVGE-05 | Phase 3 — Overage Pool Dashboard | Complete |
 | OVGE-06 | Phase 3 — Overage Pool Dashboard | Complete |
 | DISP-02 | Phase 3 — Overage Pool Dashboard | Complete |
-| AUTH-01 | Phase 4 — TBD | Planned |
-| AUTH-02 | Phase 4 — TBD | Planned |
-| AUTH-03 | Phase 4 — TBD | Planned |
-| WEBD-01 | Phase 4 — TBD | Planned |
-| WEBD-02 | Phase 4 — TBD | Planned |
-| WEBD-03 | Phase 4 — TBD | Planned |
-| POLL-01 | Phase 4 — TBD | Planned |
-| POLL-02 | Phase 4 — TBD | Planned |
-| TRAY-01 | Phase 5 — TBD | Planned |
-| TRAY-02 | Phase 5 — TBD | Planned |
-| TRAY-03 | Phase 5 — TBD | Planned |
-| TRAY-04 | Phase 5 — TBD | Planned |
-| TRAY-05 | Phase 5 — TBD | Planned |
-| PROJ-01 | Phase 6 — TBD | Planned |
-| PROJ-02 | Phase 6 — TBD | Planned |
-| PROJ-03 | Phase 6 — TBD | Planned |
+| AUTH-01 | Phase 4 — Web Data Foundation | Planned |
+| AUTH-02 | Phase 4 — Web Data Foundation | Planned |
+| AUTH-03 | Phase 4 — Web Data Foundation | Planned |
+| WEBD-01 | Phase 4 — Web Data Foundation | Planned |
+| WEBD-02 | Phase 4 — Web Data Foundation | Planned |
+| WEBD-03 | Phase 4 — Web Data Foundation | Planned |
+| POLL-01 | Phase 4 — Web Data Foundation | Planned |
+| POLL-02 | Phase 4 — Web Data Foundation | Planned |
+| TRAY-01 | Phase 5 — System Tray | Planned |
+| TRAY-02 | Phase 5 — System Tray | Planned |
+| TRAY-03 | Phase 5 — System Tray | Planned |
+| TRAY-04 | Phase 5 — System Tray | Planned |
+| TRAY-05 | Phase 5 — System Tray | Planned |
+| PROJ-01 | Phase 6 — Per-Project Breakdown | Planned |
+| PROJ-02 | Phase 6 — Per-Project Breakdown | Planned |
+| PROJ-03 | Phase 6 — Per-Project Breakdown | Planned |
 
 **Coverage:**
-- v1.0 requirements: 15 total — all complete ✓
+- v1.0 requirements: 15 total — all complete
 - v2.0 requirements: 15 total — 0 complete, 15 planned
-- Unmapped: 0 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-07*
-*Last updated: 2026-05-18 — v2.0 requirements added*
+*Last updated: 2026-05-18 — v2.0 traceability updated with phase names*

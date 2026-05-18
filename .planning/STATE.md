@@ -7,7 +7,7 @@ stopped_at: ~
 last_updated: "2026-05-18T00:00:00.000Z"
 last_activity: 2026-05-18
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,14 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Know instantly whether you're on included tokens or burning the $500 overage pool — and how fast.
-**Current focus:** Milestone v2.0 started — defining requirements and roadmap
+**Current focus:** Milestone v2.0 roadmap defined — ready to plan Phase 4
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: Phase 4 — Web Data Foundation (not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-05-18 — Milestone v2.0 started
+Status: Roadmap complete, awaiting phase planning
+Last activity: 2026-05-18 — v2.0 roadmap written (Phases 4–6)
+
+## Progress Bar
+
+```
+v2.0: [                              ] 0% (0/3 phases)
+```
 
 ## Accumulated Context
 
@@ -36,28 +42,53 @@ Last activity: 2026-05-18 — Milestone v2.0 started
 
 - v1.0 decisions logged in PROJECT.md Key Decisions table
 - v2.0: Switch data source from JSONL-only to hybrid (claude.ai web API for totals + JSONL for per-project breakdown)
-- v2.0: P90 threshold inference removed — replaced by actual plan limits from claude.ai
-- v2.0: pool_state_manager to be replaced or extended with web-sourced usage data
-- v2.0: System tray added via pystray + Pillow
+- v2.0: P90 threshold inference replaced by actual plan limits from claude.ai when web data is available
+- v2.0: pool_state_manager extended (not replaced) to accept optional web_usage param
+- v2.0: System tray added via pystray + Pillow using run_detached() — never run() or daemon thread
+- v2.0: Firefox-first cookie extraction; Chrome/Edge ABE (v127+) may block browser-cookie3; manual sessionKey paste is the guaranteed fallback
+- v2.0: Phase 4 MUST spike Cloudflare + cookie extraction on the actual machine before writing any parsing code
+- v2.0: curl_cffi is a conditional dep — add only if httpx is blocked by Cloudflare; do not pre-add
+
+### Architecture Notes
+
+**Extended modules (not rebuilt):**
+- `core/usage_fetcher.py` — add `fetch_web_usage() -> Optional[WebUsageData]`
+- `core/pool_state_manager.py` — accept optional `web_usage` param; web values win when present
+- `monitoring/orchestrator.py` — add `set_web_poller()`, add `web_usage` key to `monitoring_data`
+- `ui/session_display.py` — add web-sourced display rows via `web_usage` kwarg
+- `cli/main.py` — wire WebPoller + TrayManager; stop both in existing `finally` block
+
+**New modules:**
+- `core/models.py` — `WebUsageData` frozen dataclass
+- `monitoring/web_poller.py` — daemon thread + threading.Event stop + threading.Lock cache (300s interval)
+- `ui/tray_manager.py` — pystray wrapper using `run_detached()`; Pillow color circle
+
+**Threading model:**
+- Main thread: Rich Live display (1s sleep loop)
+- MonitoringThread: JSONL read + callbacks (existing, 10s)
+- WebPollerThread: claude.ai HTTP fetch (300s Event.wait)
+- Tray: `icon.run_detached()` from main thread — not a 4th thread
 
 ### Pending Todos
 
-None.
+- Plan Phase 4 (`/gsd-plan-phase 4`)
 
 ### Blockers/Concerns
 
-- RESEARCH NEEDED: claude.ai/settings/usage page structure — must determine if it's SSR HTML or JS-rendered with a JSON API underneath. Affects fetch strategy (requests vs Playwright).
-- RESEARCH NEEDED: Exact data fields returned — does the API expose per-project breakdown or aggregate only?
-- PITFALL: Chrome cookie encryption on Windows uses DPAPI — browser-cookie3 handles this but needs testing on the user's machine.
+- Cloudflare may block httpx on claude.ai — Phase 4 plan must spike this FIRST
+- Chrome App-Bound Encryption (v127+) may block browser-cookie3 on Chrome/Edge — Firefox-first, manual fallback mandatory
+- claude.ai API schema has no stability guarantee — use `.get("key", default)` everywhere; log raw response at DEBUG
 
 ## Deferred Items
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| *(none)* | | | |
+| Analytics | ANLX-01: Historical daily pool spend chart | v2.1+ | v2.0 scope definition |
+| Analytics | ANLX-02: Overage pool balance from web API | v2.1+ | v2.0 scope definition |
+| Alerts | ALRT-01: Terminal bell at configurable pool % threshold | v2.1+ | v2.0 scope definition |
 
 ## Session Continuity
 
 Last session: 2026-05-18T00:00:00.000Z
-Stopped at: ~
-Resume file: None
+Stopped at: Roadmap complete
+Resume file: .planning/ROADMAP.md
