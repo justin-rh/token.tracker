@@ -1,8 +1,21 @@
 # Claude Token Tracker
 
+## Current Milestone: v2.0 Web-Sourced Usage + System Tray
+
+**Goal:** Replace JSONL-based approximations with authoritative usage data pulled from claude.ai via browser cookies, add a color-coded system tray indicator, and surface per-project token breakdowns.
+
+**Target features:**
+- Browser cookie extraction (Chrome primary, Firefox/Edge fallback) to authenticate with claude.ai/settings/usage
+- Authoritative plan limits + aggregate usage totals from the claude.ai web API
+- Hybrid data layer: web totals merged with JSONL per-project folder breakdown
+- System tray icon (green <50%, yellow 50-75%, red >75% of plan limit)
+- Keep Rich terminal dashboard, updated to use new data sources
+- Monthly usage reset on the 1st of each month
+- Auto-refresh every 5 minutes
+
 ## What This Is
 
-A Windows-compatible terminal dashboard for Claude Code token usage, forked and adapted from [Claude-Code-Usage-Monitor](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor). It adds a company plan overage layer: a live indicator showing whether current usage is within the included daily token allocation or drawing from the $500 overage pool, plus how much of that pool has been spent and at what rate.
+A Windows-compatible terminal dashboard and system tray indicator for Claude Code token usage, forked and adapted from [Claude-Code-Usage-Monitor](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor). v1.0 added Windows support and an overage pool layer. v2.0 switches to authoritative usage data from claude.ai and adds a persistent system tray presence.
 
 ## Core Value
 

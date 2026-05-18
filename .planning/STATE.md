@@ -1,109 +1,54 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: milestone_complete
-stopped_at: Completed 03-03-PLAN.md — pool dashboard rows rendered; all 3 phases complete; milestone v1.0 ready
-last_updated: "2026-05-08T21:00:00Z"
-last_activity: 2026-05-08
+milestone: v2.0
+milestone_name: Web-Sourced Usage + System Tray
+status: planning
+stopped_at: ~
+last_updated: "2026-05-18T00:00:00.000Z"
+last_activity: 2026-05-18
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 11
-  completed_plans: 11
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-08)
+See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Know instantly whether you're on included tokens or burning the $500 overage pool — and how fast.
-**Current focus:** Milestone v1.0 complete — all 3 phases delivered
+**Current focus:** Milestone v2.0 started — defining requirements and roadmap
 
 ## Current Position
 
-Phase: 3 of 3 (Overage Pool Dashboard) — COMPLETE
-Plan: 3 of 3 in current phase (done)
-Status: Milestone v1.0 complete — ready for /gsd-complete-milestone
-Last activity: 2026-05-08
-
-Progress: [██████████] 100% (All 3 phases complete)
-
-## Performance Metrics
-
-**Velocity:**
-
-- Total plans completed: 4
-- Average duration: 3.8 min
-- Total execution time: 0.2 hours
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 01-windows-foundation | 5/5 | ~21 min | 4 min |
-| 02-threshold-detection | 3/3 | ~6 min | 2 min |
-| 03-overage-pool-dashboard | 1/3 | ~2 min | 2 min |
-
-**Recent Trend:**
-
-- Last 5 plans: 01-03, 01-04, 01-05, 02-01, 03-01
-- Trend: On track
-
-*Updated after each plan completion*
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-05-18 — Milestone v2.0 started
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- Fork reference tool (not install): avoids patching site-packages, enables direct source edits
-- P90 threshold detection: user doesn't know exact included-token limit; infer from session history
-- $500 pool size is config-driven: hardcoding would require code change if pool changes
-- Windows-first scope: cross-platform adds complexity without benefit for v1
-- [01-01] claude_monitor/ shim package: aliases flat repo-root modules under claude_monitor.* namespace — avoids patching 40+ source files
-- [01-01] monitor.py delegates to cli.main:main(): upstream CLI parser unchanged; Windows UTF-8 + VTP setup first
-- [01-01] Windows VTP enabled via ctypes in monitor.py: ANSI colors work in cmd.exe
-- [01-02] Use os.environ["APPDATA"] not Path.home(): APPDATA resolves AppData/Roaming; home() resolves USERPROFILE root (wrong location)
-- [01-02] LOCKED_FILES as module-level list: avoids changing load_usage_entries return type; UI reads data.reader.LOCKED_FILES after each call
-- [01-02] utf-8-sig + newline='' on all JSONL opens: handles BOM and CRLF line endings without parse errors
-- [01-03] Collect all raw JSONL lines per file first, then deduplicate, then map — ensures max(output_tokens) selection works across full set of streaming chunks
-- [01-03] Existing _create_unique_hash() / processed_hashes dedup left in place as secondary guard against cross-file message_id duplicates (different concern)
-- [01-04] SessionBlock has no session_id field — statusline lookup falls through to pricing-engine fallback; adapt _extract_key() when real data structure known (D-07)
-- [01-04] _resolve_block_cost() added as module-level function in analyzer.py — separates cost resolution from block aggregation logic
-- [01-05] _get_console_width() in terminal/themes.py — always pass explicit width to Console(); never rely on Rich auto-detection on Windows
-- [01-05] Python 3.12 shim fix: claude_monitor/__init__.py updated to use importlib.util.find_spec instead of find_module (silently dropped in 3.12)
-- [01-05] VTP and UTF-8 setup confirmed already present in monitor.py from Plan 01-01; no duplicate setup needed
-- [02-01] ThresholdState is frozen dataclass — immutable result prevents accidental mutation downstream
-- [02-01] get_threshold() accepts optional config_dir for test isolation — avoids touching real ~/.claude-monitor/ in tests
-- [02-01] Decision order D-04 > D-02 > D-01: manual override checked first, then cold-start guard, then P90
-- [02-01] camelCase keys (isGap, isActive, totalTokens) used throughout to match serialized dict format from data/analysis.py
-- [02-01] TypeError raised on SessionBlock object input — prevents silent wrong-type data corruption
-- [02-02] threshold_state=None for non-custom plans — avoids conditional logic in all callers; None is unambiguous "not applicable"
-- [02-02] token_limit overridden from ThresholdManager for custom plan — supersedes bare P90 call that had no cold-start guard
-- [02-02] ThresholdManager call placed after _calculate_token_limit() — fallback int already set before override logic runs
-- [02-03] threshold_state read via kwargs.get() in session_display — avoids adding positional param to 21-param signature
-- [02-03] tokens_used_val falls back to positional tokens_used param — no double kwargs.get() needed
-- [02-03] Separator line added before threshold rows — visually groups new Phase 2 section from existing metrics block
-- [03-01] PoolState.is_overage reflects whether at least one OVERAGE session exists in billing period (not current session status)
-- [03-01] compute_pool_state() writes pool_spend.json on every call — crash resilience over startup-only writes
-- [03-01] Stale cache detection: cached billing_cycle_start < derived current cycle start → ignore cache, recompute from blocks
+- v1.0 decisions logged in PROJECT.md Key Decisions table
+- v2.0: Switch data source from JSONL-only to hybrid (claude.ai web API for totals + JSONL for per-project breakdown)
+- v2.0: P90 threshold inference removed — replaced by actual plan limits from claude.ai
+- v2.0: pool_state_manager to be replaced or extended with web-sourced usage data
+- v2.0: System tray added via pystray + Pillow
 
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
-- PITFALL: Windows AppData path — Claude Code logs are in `%APPDATA%\.claude\projects\`, not `~\.claude\projects\`. Must verify empirically on first run (Phase 1).
-- PITFALL: WinError 32 file sharing — active session JSONL is held open by Claude Code. Wrap reads in try/except PermissionError.
-- PITFALL: requestId deduplication — RESOLVED in 01-03: _deduplicate_entries() added, max(output_tokens) per requestId, all 5 unit tests pass.
-- RESEARCH FLAG: Pool accumulation period (monthly vs billing-cycle) — architecture assumes calendar-month; verify with account owner before Phase 3.
+- RESEARCH NEEDED: claude.ai/settings/usage page structure — must determine if it's SSR HTML or JS-rendered with a JSON API underneath. Affects fetch strategy (requests vs Playwright).
+- RESEARCH NEEDED: Exact data fields returned — does the API expose per-project breakdown or aggregate only?
+- PITFALL: Chrome cookie encryption on Windows uses DPAPI — browser-cookie3 handles this but needs testing on the user's machine.
 
 ## Deferred Items
 
@@ -113,6 +58,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-05-08T20:12:27.162Z
-Stopped at: Completed 03-01-PLAN.md — core/pool_state_manager.py with 14 passing tests (TDD RED+GREEN)
+Last session: 2026-05-18T00:00:00.000Z
+Stopped at: ~
 Resume file: None
