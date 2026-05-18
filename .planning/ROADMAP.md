@@ -85,8 +85,15 @@ Plans:
   3. When the web fetch fails for any reason (Cloudflare block, network error, expired session), the dashboard silently falls back to "(est. — web data unavailable)" with no crash and no blank rows
   4. "Last web sync: HH:MM:SS" updates in the dashboard after each successful background fetch, which occurs every 5 minutes without blocking the display
   5. On the configured billing cycle start day, accumulated pool spend resets to $0.00 and a reset event appears in the console log
-**Plans**: TBD
-**UI hint**: yes
+**Plans**: 6 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — Add keyring/browser-cookie3/httpx dependencies + WebUsageData frozen dataclass
+- [ ] 04-02-PLAN.md — usage_fetcher.py: Firefox extraction, keyring migration, _read_auth_cookies() refactor, fetch_web_usage(), _discover_org_id()
+- [ ] 04-03-PLAN.md — Create monitoring/web_poller.py (WebPoller daemon thread, 300s Event loop, thread-safe cache)
+- [ ] 04-04-PLAN.md — Orchestrator wire-up (set_web_poller, web_usage in monitoring_data) + display_controller kwarg pass-through
+- [ ] 04-05-PLAN.md — session_display.py: Utilization/Resets In rows (D-17), web-unavailable fallback (D-18), Last web sync footer (D-19)
+- [ ] 04-06-PLAN.md — cli/main.py: auth setup flow (D-08/D-09) + WebPoller start/stop + D-24 billing reset log
 
 ### Phase 5: System Tray
 **Goal**: A persistent tray icon provides at-a-glance utilization status without requiring the terminal window to be visible, with controls to toggle the dashboard and quit cleanly
@@ -121,6 +128,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Windows Foundation | 5/5 | Complete | 2026-05-08 |
 | 2. Threshold Detection | 3/3 | Complete | 2026-05-08 |
 | 3. Overage Pool Dashboard | 3/3 | Complete | 2026-05-08 |
-| 4. Web Data Foundation | 0/TBD | Not started | - |
+| 4. Web Data Foundation | 0/6 | Not started | - |
 | 5. System Tray | 0/TBD | Not started | - |
 | 6. Per-Project Breakdown | 0/TBD | Not started | - |
