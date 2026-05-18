@@ -1,280 +1,411 @@
-# Features Research: Claude Token Tracker
+# Feature Landscape: Token Tracker v2.0
 
-**Domain:** Developer tooling — terminal dashboard for Claude Code usage monitoring
-**Researched:** 2026-05-07
-**Focus:** Company/enterprise plan overage detection and visibility
-
----
-
-## What the Reference Tool Has (Table Stakes)
-
-These features are already in Maciek-roboblog/Claude-Code-Usage-Monitor v3.1.0 and must be
-preserved in the fork. Dropping any of these would be a regression.
-
-| Feature | Implementation | Notes |
-|---------|---------------|-------|
-| Real-time token consumption display | Rich progress bars, live refresh | Configurable 0.1–20 Hz display rate |
-| Burn rate (tokens/hr) | Rolling-window velocity calculation | Multi-threaded data processing |
-| Cost estimation | Model-specific pricing lookup | Per-model rates applied to token counts |
-| P90 percentile threshold detection | Analyzes last 192 hours of sessions | Avoids requiring user to know their plan limit |
-| Session limit predictions | Forecasts when current window will exhaust | Time-to-exhaustion display |
-| Multiple view modes | realtime / daily / monthly | Switchable via CLI flag |
-| Plan support | Pro / Max5 / Max20 / Custom | Custom uses P90 auto-detection |
-| Adaptive theming | Auto-detects light/dark terminal | WCAG-compliant color contrast |
-| Responsive layout | Adapts to terminal dimensions | Handles narrow terminals |
-| Session window modeling | 5-hour rolling window | Matches Anthropic's actual reset model |
-| JSONL log reader | Reads `~/.claude/projects/**/*.jsonl` | Core data source |
-| File logging | Configurable severity levels | Optional, off by default |
-| Configurable refresh rate | 1–60 second data intervals | Separate from display refresh |
-| Timezone auto-detection | System locale respect | 12h/24h format support |
-
-**Confidence:** HIGH — verified against official README and multiple community forks.
+**Domain:** Developer tooling — Python terminal dashboard + Windows system tray for Claude Code usage
+**Researched:** 2026-05-18
+**Milestone focus:** v2.0 new capabilities only — browser cookie auth, claude.ai web data, system tray, hybrid data model, monthly reset, auto-refresh
 
 ---
 
-## What's Missing for the Company Plan Use Case
+## Feature 1: Browser Cookie Extraction
 
-### The Core Gap: No Overage Pool Concept
+### What It Is
 
-The reference tool has no concept of a two-tier budget: "included tokens" vs "extra usage pool."
-It models a single limit and a single window. The entire value proposition of this fork is adding
-the layer the reference tool is missing.
+Read Chrome/Firefox/Edge cookies on Windows to get the `sessionKey` value for `claude.ai`, then use that cookie in Python `requests` calls to the usage endpoint. Automates what a user would do manually in DevTools.
 
-| Gap | Why It Matters | What's Needed |
-|-----|---------------|---------------|
-| No included/overage boundary detection | User can't tell when they crossed from included allocation into the $500 pool | Threshold crossing indicator with visual state change |
-| No dollar-amount tracking against a fixed pool | "How much of my $500 is spent?" is unanswerable | Cumulative cost-against-pool calculation and display |
-| No pool-depletion projection | "When will I exhaust the $500?" is unanswerable | Projection: (remaining pool $) / (current $/hr burn rate) |
-| No configurable pool size | Pool is hardcoded nowhere — must be user-settable | Config file field: `overage_pool_usd` (default 500) |
-| Windows path assumptions | Reference uses `~/.claude/` which resolves Unix-style; Windows needs `C:\Users\<name>\.claude\` | Windows-aware path resolution |
-| No "you are in overage NOW" signal | No alert state or visual mode change at the included/overage boundary | Binary state: INCLUDED vs OVERAGE, displayed prominently |
+### Table Stakes
 
-### The Detection Problem
+| Behavior | Notes |
+|----------|-------|
+| Reads `sessionKey` cookie for `claude.ai` | The cookie is named `sessionKey`, has a `sk-ant-sid01-...` prefix |
+| Chrome as primary browser | Most common; must work before touching Firefox/Edge |
+| Fails gracefully to manual fallback | If extraction fails, print clear instruction: "Paste your sessionKey from DevTools" |
+| Does not store the cookie in plaintext | Treat it as a runtime secret; use it in memory, don't write to config |
 
-**Critical finding:** The local JSONL logs and statusline fields do NOT expose whether a session
-is billing against the included allocation or the extra usage pool. The `rate_limits.five_hour.used_percentage`
-field reaches 100 when the included window is exhausted. But on a Team/Enterprise plan with extra usage
-enabled, Claude Code continues working silently after 100% — there is no "extra_usage: true" flag in any
-local log file or statusline JSON as of May 2026.
+### Differentiators
 
-This means the overage boundary must be **inferred**, not directly read:
+| Behavior | Notes |
+|----------|-------|
+| Firefox fallback | `browser-cookie3` supports Firefox; Firefox uses SQLite + key4.db, no App-Bound encryption issue |
+| Edge fallback | Chromium-based; same encryption problem as Chrome but different profile path |
+| Friendly first-run setup guide | On first run, if auto-extract fails, print exact DevTools steps with a screenshot-friendly path: Settings → Application → Cookies → claude.ai |
 
-- **Proxy signal:** `rate_limits.five_hour.used_percentage >= 100` (or the P90 token threshold reached)
-- **Stronger proxy:** cumulative session cost within the window exceeds the P90-estimated included value
-- **Best approach:** use the P90 threshold as the included/overage boundary, track total cost against that
-  threshold, and flag anything above it as drawing from the pool
+### Anti-Features
 
-**Confidence:** HIGH for the detection gap; MEDIUM for the proxy inference approach (it's the best
-available without an Anthropic API call, but token undercounting in JSONL affects precision).
+| Anti-Feature | Reason |
+|--------------|--------|
+| Auto-refresh of cookie without user action | sessionKey is long-lived (days/weeks); re-reading on every poll is unnecessary noise against Chrome's encrypted store |
+| Storing sessionKey in config.json in plaintext | Security risk. It grants full claude.ai account access. Use Windows Credential Manager or keep in memory only |
+| Attempting to bypass App-Bound Encryption programmatically | Chrome v127+ uses App-Bound Encryption (SYSTEM-DPAPI wrapped key). browser-cookie3 is BROKEN for modern Chrome on Windows — do not attempt to work around it; fall back to manual paste |
+| Supporting all browser profiles | Multiple profiles add path complexity. Default profile only. |
 
-### The Token Undercount Problem
+### Critical Complexity Note
 
-JSONL transcript files have a known accuracy issue (confirmed open bug in anthropics/claude-code #22686):
+**browser-cookie3 is effectively broken for Chrome v127+ on Windows.** Chrome switched to App-Bound Encryption in July 2024 (v127). browser-cookie3 v0.20.1 cannot decrypt these cookies. The library shows "Unable to get key for cookie decryption" errors on modern Chrome. Firefox does NOT have this issue — Firefox uses `key4.db` + a password, not DPAPI. Edge has the same problem as Chrome.
 
-- `usage.input_tokens` is a streaming placeholder — 75% of records contain 0 or 1
-- Real input tokens are undercounted by **100–174x**
-- Real output tokens are undercounted by **10–17x**
-- The `costUSD` field was removed from JSONL in v1.0.9 (was available through v1.0.6)
+**Practical approach for v2.0:**
+1. Try `browser-cookie3` against Firefox first (most reliable)
+2. Try Chrome via `browser-cookie3` — it may work on machines that haven't updated Chrome past v126 or have the encryption bypass path available
+3. If both fail, fall back to a one-time manual paste prompt: `Enter your claude.ai sessionKey (from DevTools > Application > Cookies):`
+4. Cache the pasted value in Windows Credential Manager via `keyring` library (NOT in config.json)
 
-**Implication for this project:** Raw JSONL token counts cannot be trusted for accurate dollar tracking.
-The reference tool's P90 detection works because it looks at *relative* patterns, not absolute counts.
-For dollar-accurate overage tracking, the approach used by ccost is better: use model pricing tables
-applied to the token fields that ARE reliable (output tokens are more accurate than input tokens),
-accept that the result is an estimate, and label it as such in the UI.
-
-**Alternative:** `~/.claude/statusline.jsonl` records server-reported cumulative cost
-(`cost.total_cost_usd`) which is computed client-side but is more accurate than raw token math.
-This field is the best available cost proxy from local data.
+**Confidence:** HIGH — App-Bound Encryption breakage confirmed in browser-cookie3 GitHub issues #210, #195, #180.
 
 ---
 
-## Overage Indicator UX Patterns
+## Feature 2: claude.ai/settings/usage Data
 
-### The Single Most Important UI Decision
+### What It Is
 
-The primary user question is binary: **"Am I in overage?"** The display must answer this at a glance
-without the user having to read numbers. This calls for a state-based display, not just a progress bar.
+The `claude.ai/settings/usage` page shows authoritative plan usage. The underlying `/usage` endpoint (undocumented) returns session-window and weekly utilization as percentages plus reset timestamps. Browser extensions (claude-counter, sshnox/Claude-Usage-Tracker, lugia19/Claude-Usage-Extension) have reverse-engineered this endpoint.
 
-### Recommended Pattern: Two-State Panel
-
-```
-INCLUDED                          OVERAGE
-[===================     ] 78%    [          ] $0.00 spent
-Time to overage: ~2h 14m          $500.00 remaining
-
-vs.
-
-INCLUDED [================] 100%  OVERAGE [===       ] $47.23 spent
-                                  $452.77 remaining (9.4%) | 3h 12m to exhaust
-```
-
-The entire panel background or border color changes when state switches from INCLUDED to OVERAGE.
-This is more effective than a single progress bar that crosses a threshold line.
-
-### Color Scheme for Status States
-
-Based on terminal UX best practices (green/yellow/red hierarchy) and WCAG contrast requirements:
-
-| State | Color | ANSI | Meaning |
-|-------|-------|------|---------|
-| INCLUDED — comfortable (< 60% of window) | Green | `\033[32m` | Safe to continue |
-| INCLUDED — approaching limit (60–85%) | Yellow | `\033[33m` | Slow down, approaching overage |
-| INCLUDED — near limit (> 85%) | Orange/bright yellow | `\033[93m` | Overage imminent |
-| OVERAGE — pool < 50% spent | Red | `\033[31m` | Burning pool |
-| OVERAGE — pool > 75% spent | Bright red / bold | `\033[91m` | Pool nearly gone |
-| OVERAGE — pool exhausted | Bold red + BLOCKED text | `\033[1;91m` | Work will stop |
-
-**Key principle:** The color change at the INCLUDED → OVERAGE boundary must be dramatic and
-unmistakable, not subtle. Users are not staring at the dashboard — they glance at it. The state
-change must be visible in peripheral vision.
-
-### Progress Bar Design
-
-For the included allocation: standard single bar from 0–100%.
-
-For the overage pool: a second bar that FILLS as money is spent (not depletes), so visually both
-bars travel left-to-right. This is less confusing than one bar that empties.
-
-```
-Included:  [████████████░░░░░░░░] 61% (resets in 3h 22m)
-Pool used: [████░░░░░░░░░░░░░░░░] $94.32 / $500.00 (18.9%)
-```
-
-### Status Text Pattern
-
-Leading status label is the highest-value element per terminal UX best practices:
-
-```
-STATUS: INCLUDED  |  Burn: $1.84/hr  |  To overage: ~2h 18m
-STATUS: OVERAGE   |  Burn: $2.10/hr  |  Pool left: $405.68 (exhausted in ~193h)
-```
-
-**Confidence:** MEDIUM — derived from terminal UX best practices and community tool patterns
-(usage-bar, vscode-claude-status). No direct prior art for the exact two-state overage pattern
-in a Claude token dashboard.
-
----
-
-## Burn Rate and Projection Features
-
-### What to Calculate
-
-| Calculation | Formula | Display | Why Useful |
-|-------------|---------|---------|------------|
-| Burn rate ($/hr) | `delta_cost / delta_time` over rolling 15-30 min window | `$2.10/hr` | Answers "how fast am I spending?" |
-| Time to overage | `(included_cost_remaining) / burn_rate_$/hr` | `~2h 14m` | When shown while INCLUDED: early warning |
-| Time to pool exhaustion | `(pool_remaining_$) / burn_rate_$/hr` | `~193h` | When shown while OVERAGE: depletion ETA |
-| Pool % remaining | `(pool_size - pool_spent) / pool_size * 100` | `81.1% remaining` | Quick glance answer to "how much left?" |
-| $ spent from pool today | `sum(overage_cost, current_day)` | `$47.23 today` | Daily accountability |
-| $ spent from pool this month | `sum(overage_cost, current_month)` | `$94.32 this month` | Monthly budget view |
-
-### Burn Rate Window
-
-Use a **rolling 30-minute window** for the $/hr burn rate calculation (same approach as
-vscode-claude-status). Shorter windows (5 min) are too noisy. Longer windows (2 hr) react
-too slowly to detect a sudden heavy coding session. 30 minutes balances responsiveness and stability.
-
-Show burn rate as "LOW / MODERATE / HIGH" alongside the numeric value to give context:
-- LOW: < $0.50/hr
-- MODERATE: $0.50–$3.00/hr
-- HIGH: > $3.00/hr
-
-### Projection Caveats
-
-Projections should be labeled as estimates. The pool exhaustion projection in particular can be
-wildly off if the user's usage is bursty (heavy for 2 hours, then idle for 6). Consider showing
-a range: "at current pace: 47h | at today's peak pace: 12h."
-
-**Confidence:** HIGH for the calculation formulas; MEDIUM for the specific threshold values
-(LOW/MODERATE/HIGH burn levels are judgment calls, not empirically derived).
-
----
-
-## Differentiating Features (Nice to Have)
-
-These are not in the reference tool and would make this fork meaningfully better:
-
-| Feature | Value | Effort | Priority |
-|---------|-------|--------|----------|
-| Persistent pool spend tracking | Running total of $ spent from the $500 pool across all sessions, stored to a local file so it survives process restarts | Low | HIGH — without this, pool spend resets every dashboard launch |
-| Daily overage spend history | Table showing how much was spent from the pool each day | Medium | MEDIUM — useful for spotting high-spend days |
-| "Safe to start" indicator | "OK to start a heavy task (est. $12)" vs "CAUTION: only $8 of pool remains" | Low | MEDIUM — actionable decision support |
-| Configurable pool size | `overage_pool_usd` in config file, defaults to 500 | Low | HIGH — pool may change; must not require code change |
-| Windows-native path resolution | Use `pathlib.Path.home()` to resolve `~/.claude/` correctly on Windows | Low | HIGH — core requirement for this fork |
-| "Reset countdown" for included window | "Included allocation resets in 3h 22m" | Low | MEDIUM — already in reference tool for window; keep it |
-| Session cost vs pool cost breakdown | This session has cost $X total; $Y from included, $Z from pool | Medium | LOW — useful but complex; defer to v2 |
-
-### Persistent Pool Spend Tracking (Highest Priority Differentiator)
-
-This is the single feature that separates a useful tool from a useless one for the overage use case.
-If pool spend is only tracked in-memory, restarting the dashboard loses all context. The fix is
-simple: write a local JSON state file (e.g., `~/.claude/token-tracker-state.json`) that persists:
+### What the Endpoint Returns (MEDIUM confidence — reverse-engineered, not officially documented)
 
 ```json
 {
-  "pool_size_usd": 500.00,
-  "pool_spend_usd": 94.32,
-  "last_updated": "2026-05-07T14:23:00Z",
-  "monthly_period_start": "2026-05-01"
+  "five_hour": {
+    "utilization": 65,
+    "resets_at": "2026-05-18T16:00:00+00:00"
+  },
+  "seven_day": {
+    "utilization": 18,
+    "resets_at": "2026-05-25T02:00:00+00:00"
+  }
 }
 ```
 
-Reset this at the start of each billing month (or when the user runs `--reset-pool`).
+The `utilization` field is a percentage (0–100). Browser extensions report it is more precise than the rounded values shown on the visual page.
 
-**Confidence:** HIGH for the need; HIGH for the implementation approach.
+**Critical gap:** The endpoint reports utilization %, not raw token counts or dollar amounts. It does not expose the plan's absolute token limit, the overage pool balance, or per-project breakdown. For this project, utilization % is the primary value — it replaces the P90 inference with an authoritative "how full is my window" signal.
+
+### How to Call It
+
+```python
+import requests
+
+session = requests.Session()
+session.cookies.set("sessionKey", "<sk-ant-sid01-...>", domain="claude.ai")
+
+# GET organization ID first (needed for some endpoints)
+orgs = session.get("https://claude.ai/api/organizations").json()
+org_id = orgs[0]["uuid"]
+
+# GET usage
+usage = session.get("https://claude.ai/api/usage").json()
+```
+
+Some extensions also read org ID via `GET /api/organizations` and cache it for 24 hours. The `lastActiveOrg` cookie is an alternative source.
+
+### Table Stakes
+
+| Behavior | Notes |
+|----------|-------|
+| Fetch current 5-hour window utilization % | Replaces P90 inference with authoritative value |
+| Fetch reset timestamp for current window | Replaces the estimated "resets in X hours" with exact countdown |
+| Surface that this is web-sourced, not estimated | Label: "via claude.ai" instead of "est." prefix |
+
+### Differentiators
+
+| Behavior | Notes |
+|----------|-------|
+| Surface 7-day rolling utilization % alongside 5-hour | Useful context: are you burning unusually hard this week? |
+| Cache the response and show "last refreshed at HH:MM:SS" | The endpoint should not be hammered; cache result, show staleness |
+
+### Anti-Features
+
+| Anti-Feature | Reason |
+|--------------|--------|
+| Polling the /usage endpoint more often than every 2–5 minutes | Undocumented endpoint; aggressive polling risks rate-limiting or ban |
+| Treating utilization % as token count | Utilization is a ratio, not absolute. Applying it to a guessed limit to derive tokens is noise on top of noise |
+| Scraping the HTML page instead of the API | Fragile; page structure changes break it. Use the JSON endpoint |
+| Treating this as a billing source | The /usage endpoint shows session/weekly rate limit windows, NOT the $500 overage pool balance. Do not conflate |
+
+### Monthly Reset Behavior
+
+**Important:** The usage page billing model is more complex than "resets on the 1st." The Anthropic billing structure as of May 2026:
+
+- **5-hour rolling window:** Resets every 5 hours from when it was first filled. NOT calendar-based.
+- **7-day rolling window:** Resets 7 days after it was first filled.
+- **Monthly subscription renewal:** The subscription billing date is when the plan's included usage quota resets. This is the date the user signed up, not necessarily the 1st.
+- **Extra usage (overage pool):** Accumulates within the monthly billing cycle and is charged at renewal.
+
+For the dashboard, "monthly reset" means resetting the locally-tracked pool spend accumulator at the start of each billing month. The billing cycle start date should be user-configurable (it already is per REQUIREMENTS.md OVGE-06).
+
+**Confidence:** MEDIUM — billing structure from official Claude help docs; endpoint response format from reverse-engineered browser extensions.
 
 ---
 
-## Anti-Features (Deliberately Exclude)
+## Feature 3: System Tray Icon
 
-Features that would add complexity without serving the core use case — or that are explicitly
-out of scope per PROJECT.md.
+### What It Is
 
-| Anti-Feature | Why Exclude | What to Do Instead |
-|--------------|-------------|-------------------|
-| Linux/Mac support | Out of scope for v1; adds path and terminal-rendering complexity | Windows-first; document as Windows-only |
-| Web UI / browser dashboard | Out of scope; a terminal dashboard covers the need | Keep Rich terminal UI |
-| System tray / status bar widget | Out of scope; adds OS integration complexity | A separate tool (jens-duttke/usage-monitor-for-claude) already does this |
-| Multi-user / team aggregation | Single-user tool; org-wide rollup requires the admin API | Out of scope v1 |
-| Notification alerts (email, Slack, etc.) | Visual dashboard is sufficient; alert plumbing is a large surface area | Out of scope v1 |
-| Direct Anthropic API calls for usage data | The `/api/oauth/usage` endpoint is undocumented and rate-limits aggressively (429s reported at even 30-second intervals in issue #31637); using OAuth tokens in third-party tools also violates Anthropic ToS | Stick to local JSONL and statusline.jsonl files |
-| Exact billing reconciliation | JSONL token counts are inaccurate (100–174x undercount); cannot match Anthropic's billing exactly | Label all cost figures as estimates; make P90 threshold the proxy |
-| Configurable per-model rate tables | API pricing changes frequently; maintaining a local pricing table is a maintenance burden | Accept the reference tool's existing pricing engine; inherit it from the fork |
-| GitHub Actions / CI integration | Out of scope for a local developer tool | N/A |
-| Historical trend charts | Complex to render in Rich; adds little over the existing daily/monthly table views | Use the reference tool's existing table views |
+A persistent Windows system tray icon (notification area) that shows usage status at a glance without keeping the terminal open. Color changes based on utilization. Click opens/focuses the terminal dashboard. Right-click gives a context menu.
+
+### Library Recommendation: pystray
+
+`pystray` (not `infi.systray`) is the correct choice:
+- Cross-platform API but Windows-native backend by default
+- Supports dynamic icon update at runtime via `icon.icon = new_image`
+- `run()` is blocking from main thread; use `threading.Thread(target=icon.run, daemon=True)` pattern since Windows does not require main-thread-only restriction (unlike macOS)
+- Icon images are PIL `Image` objects — draw solid color circles with `ImageDraw` at runtime for color changes
+- Latest version: 0.19.5 (active maintenance as of 2025)
+
+`infi.systray` is Windows-only (acceptable for this project) but has a simpler API with less runtime flexibility — cannot update icon color dynamically as easily. Marked inactive (last release Jan 2025). Use `pystray`.
+
+### Table Stakes
+
+| Behavior | Notes |
+|----------|-------|
+| Persistent tray icon visible in notification area | Icon must appear when dashboard starts; survive terminal minimize |
+| Green icon at <50% utilization | Solid circle, green |
+| Yellow icon at 50–75% utilization | Solid circle, yellow |
+| Red icon at >75% utilization | Solid circle, red |
+| Tooltip shows current utilization % on hover | e.g., "Claude: 63% — resets in 2h 14m" |
+| Right-click menu: "Open Dashboard", "Quit" | Minimum viable context menu |
+| Icon disappears when dashboard quits | Clean exit required; lingering ghost icons are a UX failure |
+
+### Differentiators
+
+| Behavior | Notes |
+|----------|-------|
+| Left-click toggles terminal window focus | Single-click brings terminal to foreground or minimizes it |
+| Tooltip includes last-refresh time | "Claude: 63% (updated 14s ago)" reduces "is this stale?" anxiety |
+| Right-click menu: "Refresh Now" | Forces an immediate fetch instead of waiting for next poll cycle |
+| Right-click menu: "Copy Status" | Pastes "Claude usage: 63%, resets in 2h 14m" to clipboard — useful for pasting into Slack |
+| Animated icon when refresh is in progress | Brief spinner or pulsing during active HTTP fetch |
+
+### Anti-Features
+
+| Anti-Feature | Reason |
+|--------------|--------|
+| Balloon/toast notifications on every refresh | Intrusive. Notifications reserved for threshold crossings (INCLUDED → OVERAGE), not routine updates |
+| Custom icon image file dependency | Using a solid-color circle drawn at runtime via PIL eliminates an asset dependency and makes color changes trivial |
+| Windows startup entry (auto-launch at login) | Scope creep. Users can add it manually if desired. The dashboard itself is the entry point |
+| Multiple icon instances | Guard against double-launch creating two tray icons |
+| Pinning to taskbar | System tray (notification area) only — not the main taskbar |
+
+### Threading Architecture
+
+The tray must run in a background daemon thread. The Rich terminal dashboard owns the main thread (or its own loop). The tray thread reads utilization state from a shared data structure (a `threading.Event` + a simple `dataclass` behind a `threading.Lock`).
+
+```
+Main thread:    Rich dashboard loop (reads state, renders)
+Thread 2:       Background poller (fetches web data, writes state)
+Thread 3 (daemon): pystray tray icon (reads state, updates icon color)
+```
+
+**Confidence:** HIGH for pystray API behavior; HIGH for threading requirements; MEDIUM for the specific UX patterns (derived from Windows system tray conventions).
+
+---
+
+## Feature 4: Hybrid Data Model
+
+### What It Is
+
+Merge two data sources into a single unified usage view:
+- **Authoritative web total:** `utilization %` + `resets_at` from `claude.ai/usage` endpoint
+- **Local per-project breakdown:** token counts + cost estimates from JSONL files in `~/.claude/projects/`
+
+The web source answers "how full is my window overall?" The local JSONL source answers "which project consumed what?"
+
+### Table Stakes
+
+| Behavior | Notes |
+|----------|-------|
+| Web utilization % drives the primary INCLUDED/OVERAGE indicator | Replaces P90 inference; authoritative |
+| JSONL per-project table shows token/cost breakdown | Already in v1.0 reference tool; keep it |
+| Graceful degradation: if web fetch fails, fall back to JSONL-only mode | Dashboard must not crash or go blank if the HTTP call fails |
+| Clearly label data source in UI | "Window: 63% (via claude.ai)" vs "Projects: est. from local logs" |
+
+### Differentiators
+
+| Behavior | Notes |
+|----------|-------|
+| Reconciliation note when totals diverge significantly | If JSONL-derived estimate vs web utilization % are far apart, surface a note: "Local estimate may differ from authoritative data" |
+| Per-project cost sorted by highest spend first | Makes it immediately obvious which project is burning the most |
+| "Not yet synced" state while first fetch is in flight | Show a spinner, not stale/empty data |
+
+### Anti-Features
+
+| Anti-Feature | Reason |
+|--------------|--------|
+| Attempting to derive token counts from web utilization % | Utilization % has no mapping to absolute tokens without knowing the plan limit, which is not exposed |
+| Using JSONL token counts to cross-validate web utilization | JSONL token counts are 100–174x undercounted; comparing them to utilization % creates noise, not insight |
+| Hiding that the two sources are different | Must be transparent that INCLUDED/OVERAGE state comes from web and per-project breakdown comes from local files |
+| Blocking the UI on web fetch | Web fetch should be async/background; dashboard renders with cached/stale data until fetch completes |
+
+### Data Flow
+
+```
+On startup:
+  1. Load JSONL per-project data (fast, local)
+  2. Display immediately with JSONL-derived data
+  3. Attempt web fetch in background thread
+  4. On web fetch success: update utilization % and reset timestamp; refresh tray icon
+  5. On web fetch failure: log error; continue with JSONL-only mode; show "Web data unavailable"
+
+On subsequent polls (every 5 min):
+  1. Reload JSONL (may have new entries)
+  2. Attempt web fetch
+  3. Merge and update display
+```
+
+**Confidence:** HIGH for the graceful degradation requirement; MEDIUM for the specific merge patterns.
+
+---
+
+## Feature 5: Monthly Reset
+
+### What It Is
+
+The locally-tracked overage pool accumulator (`pool_spend_usd` in `pool_state.json`) must reset at the start of each billing month. Without a reset, the running total grows indefinitely across months.
+
+### Table Stakes
+
+| Behavior | Notes |
+|----------|-------|
+| Auto-reset pool_spend_usd to 0.00 when a new billing month starts | Compare today's date to `monthly_period_start` in state file; if a new billing month has begun, reset |
+| Billing cycle start day is user-configurable | Already in REQUIREMENTS.md OVGE-06. Default: 1 (first of month). User's actual renewal date may differ |
+| Show "resets on [date]" in dashboard | Tells user when their included allocation and pool tracking will reset |
+
+### Differentiators
+
+| Behavior | Notes |
+|----------|-------|
+| Warn user before reset (e.g., last 3 days of cycle) | "Billing cycle resets in 2 days — pool spend will clear" |
+| Show month-to-date pool spend vs prior month (if recorded) | Historical comparison: "This month: $94 vs last month: $147" |
+| Manual --reset-pool CLI flag | Allows user to force-reset if they change plans or need to start fresh |
+
+### Anti-Features
+
+| Anti-Feature | Reason |
+|--------------|--------|
+| Assuming the 1st of the month is the billing date without confirming | The billing date is the subscription signup date, not always the 1st. Must be configurable, not hardcoded |
+| Resetting silently with no log entry | Should write a log line: "Pool spend reset for new billing cycle (YYYY-MM-DD)" |
+| Trying to read billing date from claude.ai | The billing date is not exposed in the /usage endpoint. User must configure it manually |
+
+**Confidence:** HIGH for the reset mechanics; HIGH for the "must be configurable" requirement.
+
+---
+
+## Feature 6: Auto-Refresh
+
+### What It Is
+
+Background polling that re-fetches web usage data and re-reads JSONL files at a configurable interval, updating the dashboard and tray icon without user action.
+
+### Table Stakes
+
+| Behavior | Notes |
+|----------|-------|
+| Default polling interval: 5 minutes | 5 min is the standard referenced in PROJECT.md. Reasonable for an undocumented endpoint |
+| Polling interval is user-configurable | Some users may want 1 min; some may want 15 min |
+| Dashboard shows "last updated HH:MM:SS" | User must always be able to tell when data was last fetched |
+| Polling does not block the display | Background thread; the UI renders continuously from cached state |
+
+### Differentiators
+
+| Behavior | Notes |
+|----------|-------|
+| Visual refresh indicator | Brief spinner or "refreshing..." text in a status line during active fetch |
+| Adaptive backoff on 429 or connection error | If the web endpoint returns 429, back off to 15 min automatically, show "Rate limited — next refresh in 13m" |
+| Jitter on poll interval | Add ±20 seconds of random jitter to avoid thundering-herd if multiple users run this on the same network |
+| "Refresh Now" in tray right-click menu | Bypass wait without restarting the tool |
+
+### Anti-Features
+
+| Anti-Feature | Reason |
+|--------------|--------|
+| Polling the web endpoint more often than 1 minute | Risk of rate-limiting or IP ban on an undocumented endpoint |
+| Hard-coding 5 minutes | Must be configurable; users have different tolerances for data staleness |
+| Reloading the entire display on every poll | Only update the data-driven sections; avoid flicker by using Rich's Live context manager already in place |
+| Showing a full loading screen during refresh | Background update should be invisible except for the "last updated" timestamp change |
+
+### Implementation Pattern
+
+Use `threading.Event` and a background thread with `event.wait(timeout=interval)`. This allows clean shutdown (set the event → background thread wakes up and exits) and does not require killing the thread:
+
+```python
+stop_event = threading.Event()
+
+def poll_loop(stop_event, state, interval_seconds=300):
+    while not stop_event.wait(timeout=interval_seconds):
+        try:
+            new_data = fetch_web_usage()
+            with state.lock:
+                state.update(new_data)
+        except Exception as e:
+            log.warning(f"Refresh failed: {e}")
+```
+
+**Confidence:** HIGH for the pattern; MEDIUM for the 5-minute default (pragmatic choice, not empirically derived).
+
+---
+
+## Feature Dependencies
+
+```
+Browser Cookie Auth ──────────────────────┐
+                                           ▼
+claude.ai Usage Data ──── depends on ─── Auth cookie
+                                           │
+                                           ▼
+Hybrid Data Model ─────── depends on ─── Web data + JSONL reader (already built)
+                                           │
+                                           ▼
+System Tray Icon ──────── reads from ──── Hybrid data model state
+                                           │
+Monthly Reset ─────────── feeds into ──── Pool spend accumulator (already built)
+                                           │
+Auto-Refresh ──────────── drives ────────┘ All of the above
+```
+
+**Critical path:** Auth cookie must work before any web data flows. If cookie auth fails permanently, the web data features degrade gracefully to JSONL-only — but the primary v2.0 value proposition (authoritative utilization %) is lost.
+
+---
+
+## MVP for v2.0
+
+**Must ship (table stakes for this milestone):**
+1. Manual sessionKey paste fallback for cookie auth (ensures v2.0 ships even if auto-extraction fails)
+2. Web utilization % replaces P90 inference in the primary INCLUDED/OVERAGE indicator
+3. Graceful fallback to JSONL-only if web fetch fails
+4. pystray tray icon with 3-color system (green/yellow/red) and hover tooltip
+5. 5-minute auto-refresh with background thread and "last updated" timestamp
+6. Monthly pool spend auto-reset with configurable billing cycle start day
+
+**Can defer:**
+- Firefox/Edge cookie extraction (manual paste is sufficient for v2.0)
+- Tray icon left-click window toggle (right-click menu is sufficient)
+- Adaptive rate-limit backoff (manual interval config is sufficient)
+- Historical monthly comparison
 
 ---
 
 ## Confidence Levels
 
-| Finding | Confidence | Basis |
-|---------|------------|-------|
-| Reference tool feature list | HIGH | Official README + direct inspection |
-| JSONL token undercount problem | HIGH | Official GitHub issue #22686 confirmed by Anthropic; multiple community tools acknowledge it |
-| `costUSD` field removal in v1.0.9 | HIGH | Confirmed in multiple community articles and issue reports |
-| statusline.jsonl `cost.total_cost_usd` field availability | HIGH | Official Claude Code docs (code.claude.com/docs/en/statusline) — full schema confirmed |
-| `rate_limits.five_hour.used_percentage` as overage proxy | MEDIUM | Field is in official schema; 100% = included exhausted is inferred, not explicitly documented |
-| No "extra_usage" flag in local logs | HIGH | Feature request #25437 explicitly says this data is missing; proposed schema extension not yet shipped |
-| `/api/oauth/usage` endpoint rate limiting | HIGH | Two confirmed bug reports (#31637, #31021) with reproduction steps |
-| Extra usage is silent (no in-product indicator) | HIGH | Anthropic support docs confirm "seamless continuation"; PROJECT.md confirms user experience |
-| Pool spend persistence approach (local JSON file) | MEDIUM | Inferred from first principles; no prior art in the Claude monitoring ecosystem for this specific pattern |
-| Burn rate 30-minute window recommendation | MEDIUM | Community tool (vscode-claude-status) uses this; no authoritative source specifies optimal window |
-| Two-state panel UX pattern | MEDIUM | Derived from terminal UX best practices; no direct prior art in Claude tooling |
+| Area | Confidence | Reason |
+|------|------------|--------|
+| browser-cookie3 broken on Chrome v127+ Windows | HIGH | Confirmed in GitHub issues #210, #195, #180; security research confirms App-Bound Encryption change |
+| sessionKey cookie name and format | HIGH | Multiple reverse-engineered clients confirm `sk-ant-sid01-...` in `sessionKey` cookie |
+| /usage endpoint response structure | MEDIUM | Reverse-engineered by browser extensions; not officially documented; may change |
+| pystray threading model on Windows | HIGH | Official pystray docs confirm Windows does not require main-thread restriction |
+| 5-hour rolling window (not calendar day) reset model | HIGH | Confirmed in official Claude help docs and multiple GitHub issues |
+| Monthly billing date = signup date (not 1st) | HIGH | Confirmed in Anthropic billing FAQ |
+| browser-cookie3 works on Firefox | MEDIUM | Firefox uses different encryption model (not App-Bound); library has Firefox support; not tested on this specific machine |
 
 ---
 
 ## Sources
 
-- [Claude-Code-Usage-Monitor (reference repo)](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor)
-- [Claude Code statusline docs — full JSON schema](https://code.claude.com/docs/en/statusline)
-- [Feature request: expose account-wide usage to statusline (#25437)](https://github.com/anthropics/claude-code/issues/25437)
-- [JSONL token undercount bug (#22686)](https://github.com/anthropics/claude-code/issues/22686)
-- [Silent billing change to extra usage (#28927)](https://github.com/anthropics/claude-code/issues/28927)
-- [OAuth usage endpoint rate limiting (#31637)](https://github.com/anthropics/claude-code/issues/31637)
-- [Manage extra usage for Team/Enterprise plans (Anthropic docs)](https://support.claude.com/en/articles/12005970-manage-extra-usage-for-team-and-seat-based-enterprise-plans)
-- [ccost — statusline.jsonl + JSONL dual-source approach](https://github.com/cc-friend/ccost)
-- [ccusage cost modes](https://ccusage.com/guide/cost-modes)
-- [vscode-claude-status (burn rate + budget tracking reference)](https://github.com/long-910/vscode-claude-status)
-- [claude-code-usage-bar (statusline pattern)](https://github.com/leeguooooo/claude-code-usage-bar)
-- [jens-duttke Windows tray app (reads OAuth API)](https://github.com/jens-duttke/usage-monitor-for-claude)
-- [Evil Martians: CLI UX progress display best practices](https://evilmartians.com/chronicles/cli-ux-best-practices-3-patterns-for-improving-progress-displays)
+- [browser-cookie3 PyPI](https://pypi.org/project/browser-cookie3/)
+- [browser-cookie3 GitHub issues — Chrome encryption breakage](https://github.com/borisbabic/browser_cookie3/issues/210)
+- [pystray documentation](https://pystray.readthedocs.io/en/latest/usage.html)
+- [pystray PyPI](https://pypi.org/project/pystray/)
+- [Google Chrome App-Bound Encryption announcement (July 2024)](https://security.googleblog.com/2024/07/improving-security-of-chrome-cookies-on.html)
+- [sshnox/Claude-Usage-Tracker — GET /api/organizations pattern](https://github.com/sshnox/Claude-Usage-Tracker)
+- [she-llac/claude-counter — /usage endpoint + SSE stream](https://github.com/she-llac/claude-counter)
+- [lugia19/Claude-Usage-Extension](https://github.com/lugia19/Claude-Usage-Extension)
+- [Manage extra usage for paid Claude plans (official)](https://support.claude.com/en/articles/12429409-manage-extra-usage-for-paid-claude-plans)
+- [Paid Plan Billing FAQs (official)](https://support.claude.com/en/articles/8325618-paid-plan-billing-faqs)
+- [Claude usage limits — 5-hour rolling window (fuelgauge.pro guide)](https://fuelgauge.pro/guides/claude-usage-limits/)
+- [Python threading.Event documentation](https://docs.python.org/3/library/threading.html)

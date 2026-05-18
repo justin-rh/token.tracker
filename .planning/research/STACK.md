@@ -1,12 +1,301 @@
 # Stack Research: Claude Token Tracker (Windows Fork)
 
 **Project:** Fork of Claude-Code-Usage-Monitor for Windows + company plan overage tracking
-**Researched:** 2026-05-07
+**Researched:** 2026-05-07 (v1.0), updated 2026-05-18 (v2.0 additions)
 **Source project version:** v3.1.0 (7.9k stars, 401 forks)
 
 ---
 
-## Recommended Stack
+## v2.0 New Capabilities Stack
+
+These additions are required for the three new v2.0 features: browser cookie extraction,
+claude.ai web API fetching, and system tray icon.
+
+---
+
+## Browser Cookie Extraction
+
+### The Chrome App-Bound Encryption Problem (Critical Blocker Risk)
+
+Chrome 127 (released July 30, 2024) introduced App-Bound Encryption (ABE), which ties
+cookie encryption to the Chrome application's identity. This breaks all third-party
+DPAPI-based decryption approaches, including browser-cookie3.
+
+**Status of browser-cookie3 with Chrome 127+:**
+- Issue #210 ("Broken decryption in Chrome") opened September 2024, remains open
+- Error: `BrowserCookieError: Unable to get key for cookie decryption` (MAC check failure)
+- Root cause: v20-prefixed cookie values use ABE; the library's `_decrypt` method fails on
+  AES-GCM MAC verification for these
+- The library is classified as inactive/low maintenance — no fix shipped as of Jan 2025 (v0.20.1)
+
+**However, the risk is manageable because:**
+1. Edge (Chromium-based) is the default Windows 11 browser and ABE applies specifically to
+   Chrome's COM-bound encryption server, not Edge's
+2. Firefox stores cookies in a separate format (NSS/SQLite) unaffected by Chrome ABE
+3. The `sessionKey` cookie needed for claude.ai is set per browser session — if the user
+   primarily uses Edge or Firefox to access claude.ai, cookie extraction works
+
+**Strategy: Edge-first extraction, Chrome as fallback, Firefox as tertiary**
+
+| Library | pip name | Version | Purpose | Windows Notes |
+|---------|----------|---------|---------|---------------|
+| browser-cookie3 | `browser-cookie3` | 0.20.1 | Extract cookies from Edge/Firefox/Chrome | Edge and Firefox work reliably; Chrome 127+ has ABE issue. Requires Chrome to be closed when reading its SQLite DB. |
+| pywin32 | `pywin32` | >=306 | Windows DPAPI decryption (pulled in by browser-cookie3) | browser-cookie3 uses `win32crypt.CryptUnprotectData` on Windows; pywin32 is a hard transitive dep |
+| pycryptodome | `pycryptodome` | >=3.20.0 | AES-GCM decryption of cookie values | Transitive dep of browser-cookie3; already in the cryptography ecosystem |
+
+**Note:** The existing `cryptography>=41.0.0` dep in pyproject.toml does NOT replace
+pycryptodome. They are separate libraries. browser-cookie3 uses pycryptodome specifically.
+
+**Install:**
+```
+pip install browser-cookie3 pywin32
+```
+pycryptodome installs automatically as a browser-cookie3 dependency.
+
+**Usage pattern:**
+```python
+import browser_cookie3
+
+def get_claude_cookies() -> dict:
+    """Try Edge first, Firefox second, Chrome last."""
+    for loader in [browser_cookie3.edge, browser_cookie3.firefox, browser_cookie3.chrome]:
+        try:
+            cj = loader(domain_name="claude.ai")
+            cookies = {c.name: c.value for c in cj}
+            if "sessionKey" in cookies:
+                return cookies
+        except browser_cookie3.BrowserCookieError:
+            continue
+    raise RuntimeError("No claude.ai session cookie found in any browser")
+```
+
+**Fallback if ABE blocks all browsers:** Manual cookie paste into a local config file.
+Document this as the fallback in the user-facing error message.
+
+---
+
+## HTTP Client (claude.ai Fetching)
+
+| Library | pip name | Version | Purpose | Windows Notes |
+|---------|----------|---------|---------|---------------|
+| httpx | `httpx` | >=0.27.0 (latest: 0.28.1) | Sync HTTP client for fetching claude.ai/settings/usage | Full Windows support; sync Client is the right choice here (no async needed). Accepts CookieJar from browser-cookie3 directly. |
+
+**Why httpx over requests:**
+- Already idiomatic in modern Python tooling
+- Native CookieJar support: `httpx.Client(cookies=cookie_jar)` accepts the cookiejar
+  object returned by browser-cookie3 directly without conversion
+- Better error messages and timeout handling than requests
+- Consistent with async-capable future upgrade path if needed
+
+**Why not requests:** requests 2.x works fine too, but httpx is cleaner and has no practical
+downside. Do not add both.
+
+**Usage pattern:**
+```python
+import httpx
+import browser_cookie3
+
+def fetch_usage_page(cookies: dict) -> str:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ...",
+        "Accept": "application/json",
+    }
+    with httpx.Client(cookies=cookies, headers=headers, follow_redirects=True, timeout=15.0) as client:
+        r = client.get("https://claude.ai/settings/usage")
+        r.raise_for_status()
+        return r.text
+```
+
+**Install:**
+```
+pip install httpx
+```
+
+---
+
+## System Tray Icon
+
+| Library | pip name | Version | Purpose | Windows Notes |
+|---------|----------|---------|---------|---------------|
+| pystray | `pystray` | 0.19.5 | System tray icon with menu | Windows backend (win32) is the default and fully featured. `icon.run()` is blocking; use `icon.run_detached()` or run in a thread. |
+| Pillow | `Pillow` | >=10.0.0 (latest: 12.2.0) | Generate tray icon images (PIL.Image.Image required by pystray) | Required — pystray does not accept raw image bytes; must be a PIL Image object. Pure Python wheels available for Windows x64. |
+
+**Threading note for Windows:**
+On Windows, `pystray.Icon.run()` does NOT need to be on the main thread (unlike macOS where
+it is mandatory). The safe pattern is to launch the tray icon in a daemon thread so the Rich
+terminal dashboard can run on the main thread.
+
+```python
+import threading
+import pystray
+from PIL import Image, ImageDraw
+
+def make_icon(color: str) -> Image.Image:
+    """Generate a 64x64 solid-color circle icon."""
+    img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    draw.ellipse((4, 4, 60, 60), fill=color)
+    return img
+
+COLOR_MAP = {
+    "green": "#22c55e",   # <50% usage
+    "yellow": "#eab308",  # 50-75% usage
+    "red": "#ef4444",     # >75% usage
+}
+
+def start_tray(icon_ref: list) -> None:
+    icon = pystray.Icon(
+        "token-tracker",
+        make_icon(COLOR_MAP["green"]),
+        "Claude Token Tracker",
+        menu=pystray.Menu(
+            pystray.MenuItem("Open Dashboard", lambda: None),
+            pystray.MenuItem("Quit", lambda: icon_ref[0].stop()),
+        ),
+    )
+    icon_ref.append(icon)
+    icon.run()   # blocks; safe in non-main thread on Windows
+
+icon_ref = []
+tray_thread = threading.Thread(target=start_tray, args=(icon_ref,), daemon=True)
+tray_thread.start()
+```
+
+**Updating icon color at runtime:**
+```python
+icon_ref[0].icon = make_icon(COLOR_MAP["yellow"])
+```
+
+**Install:**
+```
+pip install pystray Pillow
+```
+
+---
+
+## Background Polling Thread
+
+No new libraries needed. Use Python stdlib `threading.Thread` with `threading.Event` for
+clean shutdown.
+
+```python
+import threading
+import time
+
+_stop_event = threading.Event()
+
+def polling_loop(interval_seconds: int = 300) -> None:
+    """Fetch usage data every interval_seconds. Stops on _stop_event."""
+    while not _stop_event.wait(timeout=interval_seconds):
+        try:
+            refresh_usage_data()
+        except Exception as e:
+            log_error(e)   # never crash the poller
+
+poll_thread = threading.Thread(target=polling_loop, daemon=True, name="usage-poller")
+poll_thread.start()
+
+# Shutdown:
+_stop_event.set()
+```
+
+**Why daemon=True:** The thread must not prevent the process from exiting when the user
+closes the terminal. A daemon thread is killed automatically when the main thread exits.
+
+**Why threading.Event over time.sleep():** `Event.wait(timeout=N)` is interruptible —
+calling `_stop_event.set()` wakes the thread immediately rather than waiting up to N seconds.
+
+**Thread safety with Rich Live display:** The polling thread writes to shared data structures
+that the main (Rich) thread reads. Use `threading.Lock()` around any shared mutable state
+(dict, list). Pydantic frozen models are inherently safe to read across threads once assigned.
+
+---
+
+## Complete pyproject.toml Additions for v2.0
+
+Add these to the `dependencies` list in pyproject.toml:
+
+```toml
+"browser-cookie3>=0.20.1",
+"httpx>=0.27.0",
+"Pillow>=10.0.0",
+"pywin32>=306",
+"pystray>=0.19.5",
+```
+
+Add to `[project.optional-dependencies].dev`:
+```toml
+"pytest-httpx>=0.30.0",   # mock httpx calls in tests
+```
+
+---
+
+## Do NOT Add
+
+| Library | Why Not |
+|---------|---------|
+| `requests` | httpx covers the same need with better ergonomics; two HTTP clients is redundant |
+| `selenium` / `playwright` | Full browser automation is massive overkill for a single GET to claude.ai |
+| `beautifulsoup4` / `lxml` | The claude.ai usage page returns JSON, not HTML requiring parsing |
+| `aiohttp` | Async HTTP not needed; the 5-minute polling interval has no latency requirement |
+| `asyncio` event loop | No concurrent I/O; a single sync `httpx.Client` call suffices |
+| `psutil` | Not needed for this feature set |
+| `PyQt5` / `tkinter` | GUI frameworks — pystray with win32 backend handles the tray natively without a GUI framework |
+| `win10toast` / `plyer` | Desktop notifications are out of scope for v2.0 per PROJECT.md |
+| `keyring` | Browser-cookie3 pulls this in on some platforms; do not add it explicitly — it's a transitive dep |
+| `secretstorage` | Linux-only; irrelevant on Windows |
+| `pycryptodome` (explicit) | Let browser-cookie3 pull it as a transitive dep; declaring it explicitly creates version pin risk |
+
+---
+
+## Risk Register
+
+| Risk | Severity | Likelihood | Mitigation |
+|------|----------|-----------|------------|
+| Chrome ABE breaks cookie extraction | High | Medium (depends on which browser user uses for claude.ai) | Edge-first strategy; Firefox fallback; manual cookie fallback as last resort |
+| claude.ai page structure changes | Medium | Medium | Page returns JSON not HTML; JSON schema changes are less frequent than DOM changes |
+| browser-cookie3 inactive maintenance | Low | Low (works for Edge/Firefox which are the primary targets) | Vendor the patched version if needed; library is small (~1000 lines) |
+| pystray icon not appearing on taskbar | Low | Low | Confirmed working on Windows 11 with win32 backend |
+| Thread-safety bugs with Rich Live | Medium | Low | Use threading.Lock around shared state; frozen Pydantic models for read-only data |
+
+---
+
+## Confidence Levels
+
+| Area | Confidence | Reasoning |
+|------|------------|-----------|
+| browser-cookie3 Edge/Firefox compatibility | HIGH | Library confirmed working for Edge/Firefox; issue #210 is Chrome-specific |
+| Chrome ABE breaking browser-cookie3 | HIGH | Issue #210 open, Google security blog confirmed ABE in Chrome 127+, multiple sources corroborate |
+| httpx Windows compatibility | HIGH | No platform-specific restrictions; widely used on Windows |
+| pystray Windows threading behavior | HIGH | Official docs confirm `run()` is safe in non-main thread on Windows; run_detached only mandatory on macOS |
+| Pillow version requirement | HIGH | pystray docs and tutorials universally require PIL.Image.Image objects |
+| pywin32 as transitive dep of browser-cookie3 | MEDIUM | Confirmed in browser-cookie3 install logs and dependency metadata; not tested on this specific machine |
+| claude.ai usage page returning JSON | MEDIUM | Inferred from typical SPA architecture; the page exists at claude.ai/settings/usage but exact response format unverified without live access |
+
+---
+
+## Sources
+
+- [browser-cookie3 PyPI (v0.20.1)](https://pypi.org/project/browser-cookie3/)
+- [browser-cookie3 Issue #210: Broken decryption in Chrome](https://github.com/borisbabic/browser_cookie3/issues/210)
+- [browser-cookie3 Issue #195: Stopped working on Edge and Chrome](https://github.com/borisbabic/browser_cookie3/issues/195)
+- [Google Security Blog: Chrome App-Bound Encryption](https://security.googleblog.com/2024/07/improving-security-of-chrome-cookies-on.html)
+- [pystray PyPI (0.19.5)](https://pypi.org/project/pystray/)
+- [pystray docs: FAQ on threading](https://pystray.readthedocs.io/en/latest/faq.html)
+- [pystray docs: Creating a tray icon](https://pystray.readthedocs.io/en/latest/usage.html)
+- [httpx PyPI (0.28.1)](https://pypi.org/project/httpx/)
+- [httpx docs: Developer Interface](https://www.python-httpx.org/api/)
+- [Pillow PyPI (12.2.0)](https://pypi.org/project/pillow/)
+
+---
+
+## v1.0 Stack (Existing — Do Not Change)
+
+The following sections document the v1.0 stack decisions. They remain valid for v2.0.
+
+---
+
+## Recommended Stack (v1.0)
 
 ### Core Framework
 
@@ -27,7 +316,7 @@
 | uv | Latest (0.5+) | Virtual env, dependency management, editable install | 10-100x faster than pip; handles pyproject.toml natively; single-binary install on Windows via PowerShell |
 | pyproject.toml | PEP 517/518 | Project metadata, deps, entry points | Already the upstream format; do not add requirements.txt |
 
-### No New Dependencies Needed
+### No New Dependencies Needed (v1.0 only)
 
 The upstream stack already covers everything for the core fork. The only additions for the overage feature:
 - `statistics.quantiles` from stdlib (no install needed) OR keep numpy for P90 — your choice.
@@ -169,29 +458,11 @@ uv pip install -e .     # editable install — code changes take effect immediat
 uv run claude-monitor   # or whichever entry point you name
 ```
 
-### pyproject.toml Minimal Starting Point
-
-Copy the upstream `pyproject.toml` and:
-- Change `name` to `token-tracker` (or your choice)
-- Change `version` to `0.1.0`
-- Add `tzdata` to dependencies (Windows tz database)
-- Keep all upstream entry points or rename to avoid conflict with the upstream if both are installed
-- Remove `numpy` if you use `statistics.quantiles` for P90
-
 ### Do NOT do This
 
 - Do not `pip install claude-code-usage-monitor` and then try to patch it. The installed package is in site-packages and not editable.
 - Do not add a `requirements.txt` alongside `pyproject.toml` — it creates dependency duplication drift.
 - Do not use `python setup.py develop` — this is the pre-PEP517 deprecated approach.
-
-### Tracking Upstream Changes
-
-```bash
-# Add upstream as a remote to pull in future fixes
-git remote add upstream https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor
-git fetch upstream
-git log upstream/main --oneline  # see what changed
-```
 
 ---
 
@@ -214,43 +485,11 @@ All prices in USD per million tokens (MTok).
 | Claude Haiku 3.5 | $0.80 | $1.00 | $1.60 | $0.08 | $4.00 |
 | Claude Haiku 3 | $0.25 | $0.30 | $0.50 | $0.03 | $1.25 |
 
-### Notes for Cost Calculation
-
-- **Cache write tokens** appear in JSONL as `cache_creation_input_tokens`. The JSONL does NOT tell you which cache duration (5 min vs 1 hr) was used — you cannot distinguish them from the logs. Use the 5-minute write price ($1.25x multiplier over base input) as a conservative approximation.
-- **Cache read tokens** appear as `cache_read_input_tokens`. Price is 0.1x base input.
-- **Regular input tokens** appear as `input_tokens` (subtract cache tokens if present).
-- **Output tokens** appear as `output_tokens`.
-
-### Cost Calculation Formula per JSONL Entry
-
-```python
-def compute_cost(entry: dict, model_prices: dict) -> float:
-    model = entry.get("model", "")
-    prices = model_prices.get(model, model_prices["default"])
-    
-    raw_input = entry.get("input_tokens", 0) - entry.get("cache_creation_input_tokens", 0) - entry.get("cache_read_input_tokens", 0)
-    cache_write = entry.get("cache_creation_input_tokens", 0)
-    cache_read = entry.get("cache_read_input_tokens", 0)
-    output = entry.get("output_tokens", 0)
-    
-    cost = (
-        raw_input * prices["input"] +
-        cache_write * prices["cache_write"] +
-        cache_read * prices["cache_read"] +
-        output * prices["output"]
-    ) / 1_000_000
-    return cost
-```
-
-### Opus 4.7 Tokenizer Warning
-
-Opus 4.7 ships with a new tokenizer that produces up to 35% more tokens for the same input text. If you see unexpectedly high token counts for Opus 4.7 sessions, this is by design, not a bug.
-
 ---
 
 ## What NOT to Use / Watch Out For
 
-### Deprecated Approaches
+### Deprecated Approaches (v1.0 + v2.0)
 
 | Anti-Pattern | Why Avoid | Use Instead |
 |--------------|-----------|-------------|
@@ -264,6 +503,12 @@ Opus 4.7 ships with a new tokenizer that produces up to 35% more tokens for the 
 | High `refresh_per_second` on `Live` (e.g., 30) | Causes visible flicker in Windows Terminal | Use 4 or lower |
 | Emoji in table column headers | Width alignment breaks borders on Windows fonts | Use ASCII text labels |
 | `numpy` for a single P90 calculation | Heavy dependency for trivial stats | `statistics.quantiles(data, n=10)[8]` |
+| `requests` alongside `httpx` | Two HTTP clients serving the same purpose | Use httpx only |
+| `selenium` or `playwright` | Browser automation overkill for a single GET | httpx + browser-cookie3 |
+| `beautifulsoup4` / `lxml` | Unnecessary if claude.ai returns JSON | Parse JSON directly |
+| `aiohttp` or `asyncio` event loop | No concurrent I/O requirement | Sync httpx.Client |
+| `PyQt5` / `tkinter` | Full GUI framework for what is just a tray icon | pystray with win32 backend |
+| `pycryptodome` declared explicitly | Version pin risk; let browser-cookie3 pull as transitive dep | Omit from pyproject.toml |
 
 ### Pydantic v1 / v2 Compatibility
 
@@ -272,22 +517,6 @@ The upstream requires pydantic >=2.0.0. Do not backslide to v1. If you see `from
 ### Python Version Floor
 
 Do not target Python 3.8. It reached end-of-life October 2024. The upstream targets 3.9+; recommend 3.11+ for your fork to get `tomllib` in stdlib and better `zoneinfo` support.
-
----
-
-## Confidence Levels
-
-| Area | Confidence | Reasoning |
-|------|------------|-----------|
-| Upstream path logic | HIGH | Verified by reading actual source code from the repo — uses `Path(...).expanduser()` |
-| `Path.home()` preference over `expanduser` on Windows domain accounts | MEDIUM | CPython bug tracker confirms env-var dependency issue; no direct Windows Enterprise test data available |
-| Rich Windows Terminal compatibility | HIGH | Verified via official Rich docs + confirmed GitHub issues with specific issue numbers |
-| Rich spinner/Live scroll bug | HIGH | Multiple confirmed open GitHub issues (#1320, #2499, #1024) with reproduction steps |
-| Anthropic pricing table | HIGH | Fetched directly from official pricing page (platform.claude.com) |
-| `tzdata` requirement on Windows | HIGH | Well-documented pytz behavior; pytz docs explicitly state this |
-| uv editable install workflow | HIGH | Official uv docs + pydevtools handbook |
-| P90 via `statistics.quantiles` as numpy replacement | HIGH | Python 3.10 stdlib, no external verification needed |
-| Opus 4.7 tokenizer 35% increase | HIGH | Noted explicitly on official pricing page |
 
 ---
 
@@ -303,5 +532,13 @@ Do not target Python 3.8. It reached end-of-life October 2024. The upstream targ
 - [Anthropic pricing page (official)](https://platform.claude.com/docs/en/about-claude/pricing)
 - [uv official docs — editable installs](https://docs.astral.sh/uv/pip/packages/)
 - [uv official docs — working on projects](https://docs.astral.sh/uv/guides/projects/)
-- [Claude Code JSONL path — ccusage reference impl](https://github.com/ryoppippi/ccusage)
+- [browser-cookie3 PyPI (v0.20.1)](https://pypi.org/project/browser-cookie3/)
+- [browser-cookie3 Issue #210: Broken decryption in Chrome](https://github.com/borisbabic/browser_cookie3/issues/210)
+- [browser-cookie3 Issue #195: Stopped working on Edge and Chrome](https://github.com/borisbabic/browser_cookie3/issues/195)
+- [Google Security Blog: Chrome App-Bound Encryption (July 2024)](https://security.googleblog.com/2024/07/improving-security-of-chrome-cookies-on.html)
+- [pystray PyPI (0.19.5)](https://pypi.org/project/pystray/)
+- [pystray docs: FAQ on threading](https://pystray.readthedocs.io/en/latest/faq.html)
+- [pystray docs: Creating a tray icon](https://pystray.readthedocs.io/en/latest/usage.html)
+- [httpx PyPI (0.28.1)](https://pypi.org/project/httpx/)
+- [Pillow PyPI (12.2.0)](https://pypi.org/project/pillow/)
 - [Claude-Code-Usage-Monitor upstream repo](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor)

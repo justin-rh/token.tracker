@@ -1,410 +1,646 @@
-# Pitfalls: Windows Fork of Python Terminal Tool
+# Pitfalls: v2.0 Additions to Claude Token Tracker
 
-**Domain:** Porting Python CLI / Rich terminal UI (Claude-Code-Usage-Monitor) from Unix to Windows 11
-**Researched:** 2026-05-07
+**Domain:** Adding browser cookie auth, claude.ai web fetching, and system tray to an existing
+Python Windows terminal dashboard
+**Researched:** 2026-05-18
+**Milestone:** v2.0 Web-Sourced Usage + System Tray
+
+This file replaces the v1.0 PITFALLS.md for features added in v2.0. v1.0 pitfalls (path handling,
+Rich rendering, JSONL parsing, P90 detection) remain valid for the existing codebase and are
+documented in the git history. This file covers only the new v2.0 feature areas.
 
 ---
 
-## Path Handling Pitfalls
+## Area 1: Browser Cookie Extraction on Windows
 
-### CRITICAL — Hardcoded Unix Log Path
+### CRITICAL — Chrome v127+ App-Bound Encryption Breaks Simple DPAPI Decryption
 
-**What goes wrong:** The upstream tool uses `~/.claude/projects/` (or `~/.config/claude`) to discover JSONL files. On Windows, `~` expands via `USERPROFILE`, not `HOME`. The actual Claude Code log path on Windows is `%APPDATA%\.claude\projects\` (i.e., `C:\Users\<name>\AppData\Roaming\.claude\projects\`). A naively ported `Path("~/.claude/projects").expanduser()` will resolve to `C:\Users\<name>\.claude\projects\` — the wrong location — and silently find zero files.
+**What goes wrong:** Before Chrome v127 (July 2024), any Python script running as the same
+Windows user could call `CryptUnprotectData` via `pywin32` to decrypt the AES key stored in
+Chrome's `Local State` file. Chrome v127 introduced "app-bound encryption" (ABE): the AES key
+is now encrypted a second time by a SYSTEM-level Chrome service that verifies the calling
+process is Chrome itself. A plain `pywin32.CryptUnprotectData()` call on the `encrypted_key`
+field returns an error or garbage bytes on Chrome v127+. Libraries like `browser-cookie3` and
+`pycookiecheat` that were not updated for ABE will silently return empty cookie jars or
+malformed bytes without raising an explicit error.
 
-**Warning sign:** Tool starts but shows no sessions and no error. Log search returns empty; `APPDATA` directory is never checked.
+**Why it happens:** The `encrypted_key` in `%LOCALAPPDATA%\Google\Chrome\User Data\Local State`
+now has a v20 prefix instead of v10/v11. The v20 prefix signals ABE-protected data that requires
+the `IElevator` COM interface (available only to the Chrome process).
+
+**Consequences:** Cookie extraction returns zero cookies, or the sessionKey cookie is missing.
+The web fetch phase never receives a valid session, so it falls back to JSONL-only data silently.
+This is a hard blocker on the primary v2.0 data source if Chrome is the only supported browser.
 
 **Prevention:**
-1. Use `Path.home() / "AppData" / "Roaming" / ".claude" / "projects"` on Windows, with a `sys.platform` branch.
-2. Alternatively, respect the `CLAUDE_CONFIG_DIR` environment variable as an escape hatch, and document the Windows default prominently.
-3. Never hardcode the path as a string literal; always construct it through `pathlib.Path`.
+1. Check `browser-cookie3` version. As of 2025, version 0.19.1+ added a Windows ABE workaround
+   using a temporary copy of the Cookies database opened via SQLite URI read-only mode. Pin to
+   this version or later and verify the workaround is active.
+2. Implement a graceful fallback chain: Chrome ABE failure → Edge (also Chromium-based, same
+   ABE problem but may have different timing) → Firefox (unencrypted cookies.sqlite, no ABE).
+3. On failure, surface a user-visible message: "Chrome cookie extraction failed — try Firefox or
+   Edge." Do not silently use JSONL-only data without telling the user.
+4. Test against the actual installed Chrome version on the target machine before shipping. The
+   ABE bypass that works in lab testing may be patched by the time the feature ships.
 
-**Most likely phase:** Phase 1 (initial port / smoke test). Presents as "no data found" rather than a crash, so easy to miss.
-
----
-
-### CRITICAL — String Concatenation Instead of pathlib
-
-**What goes wrong:** Code doing `base_path + "/" + subdir` or `f"{home}/.claude/{session}"` produces valid paths on Unix but broken paths on Windows (forward slash inside a string component is not split by `os.path.join`, creating mixed-slash paths like `C:\Users\name/.claude/projects`). Most Python `open()` calls tolerate this, but glob patterns and subprocess calls do not.
-
-**Warning sign:** Unit tests pass on the developer's Mac but subprocess calls or glob patterns silently fail on Windows. `str(path)` shows mixed `\` and `/`.
-
-**Prevention:** Replace every path string concatenation with `pathlib.Path` `/` operator. Use `path.as_posix()` only when passing to tools that explicitly require POSIX strings (git, etc.).
-
-**Most likely phase:** Phase 1, surfaces again in Phase 3 if subprocess calls are added for git integration.
+**Phase:** Cookie extraction phase (Phase 4 or whatever phase introduces web fetch). Must be
+validated with live Chrome on the user's machine before declaring the phase complete.
 
 ---
 
-### MODERATE — MAX_PATH (260-character limit)
+### CRITICAL — Chrome Cookies Database Locked While Chrome Is Running
 
-**What goes wrong:** Deep project structures (long org names, long session UUIDs) can exceed the legacy 260-character Windows path limit. `open()` raises `FileNotFoundError` with no hint about path length being the cause.
+**What goes wrong:** Chrome holds an exclusive write lock on
+`%LOCALAPPDATA%\Google\Chrome\User Data\Default\Cookies` while running. A direct `sqlite3.connect()`
+call raises `sqlite3.OperationalError: database is locked`. This is the same `WinError 32`
+file-sharing violation pattern that hit JSONL reading in v1.0, but SQLite is less forgiving than
+Python's `open()` — there is no equivalent of `os.O_RDONLY` that bypasses the lock cleanly.
 
-**Warning sign:** Works on shallow paths, fails on deeply nested ones. Error is `FileNotFoundError` or `OSError` with no obvious explanation.
-
-**Prevention:** Enable long paths via `HKLM\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled = 1` in your installer or README, and document it as a prerequisite. Python 3.6+ respects this registry key automatically.
-
-**Most likely phase:** Phase 2 (file discovery), unlikely to surface until real user data is present.
-
----
-
-### MINOR — Case Sensitivity
-
-**What goes wrong:** NTFS is case-insensitive by default. Code doing `path.lower()` comparisons for deduplication works on Windows but will break if the tool is later run on a case-sensitive volume (WSL, Docker). More practically: glob patterns like `*.JSONL` vs `*.jsonl` behave differently.
-
-**Prevention:** Always use `.lower()` or `.casefold()` consistently when comparing filenames; use `Path.glob("*.jsonl")` (lowercase) as the canonical pattern.
-
-**Most likely phase:** Phase 1.
-
----
-
-## Rich Windows Rendering Pitfalls
-
-### CRITICAL — ANSI/Color Support in cmd.exe and Older PowerShell
-
-**What goes wrong:** Rich auto-detects the color system. In legacy `cmd.exe` (without Virtual Terminal Processing enabled), Rich falls back to 8 colors or plain text. The dashboard can render with no color at all, making progress bars and status indicators unreadable. Classic `cmd.exe` does not have VT100 enabled by default before Windows 10 1511.
-
-**Warning sign:** Running `python -m rich` in `cmd.exe` shows `[bold]` as literal text, or colors render as garbled escape sequences.
+**Why it happens:** Chrome uses WAL (Write-Ahead Logging) mode and holds shared-memory files
+(`.shm`, `.wal`) alongside the main `.db`. Even if the main file opens, reading without the
+WAL pages produces stale or incomplete data.
 
 **Prevention:**
-- Target Windows Terminal as the documented runtime; call this out in the README.
-- Programmatically enable VTP at startup via `ctypes` if running under `cmd.exe`:
-  ```python
-  import ctypes, sys
-  if sys.platform == "win32":
-      kernel32 = ctypes.windll.kernel32
-      kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
-  ```
-- Do not rely on the `colorama` shim — Rich handles its own rendering pipeline and mixing colorama can cause double-escaping.
+1. Open the Cookies database using SQLite's URI read-only mode with `immutable=1`:
+   `sqlite3.connect("file:///...Cookies?immutable=1&mode=ro", uri=True)`. The `immutable=1`
+   flag tells SQLite to skip the WAL and treat the file as read-only, bypassing the lock.
+2. Alternatively, copy the Cookies file (and `.shm`/`.wal` files if present) to a temp
+   directory before opening. This is the approach `browser-cookie3` uses internally.
+3. Never open the live Cookies file in write mode. Even accidental journal creation corrupts
+   Chrome's database.
 
-**Most likely phase:** Phase 1 (immediately visible when first running the port).
+**Phase:** Cookie extraction. Must be the first thing tested with Chrome open.
 
 ---
 
-### CRITICAL — Terminal Width Auto-Detection Fallback
+### MODERATE — Cookie Staleness: Chrome Refreshes Cookies Without Writing to Disk Immediately
 
-**What goes wrong:** Rich uses `shutil.get_terminal_size()` internally. There is a confirmed Rich bug (issue #3412) where on Windows, width detection only checks `STDOUT`. If the console is created against `STDERR` (common when stdout is redirected to a log), the auto-detected size falls back to `(80, 25)` regardless of actual window size. The dashboard then wraps incorrectly.
-
-**Warning sign:** Dashboard wraps at 80 columns even in a wide Windows Terminal window. Symptom disappears when stdout is not redirected.
-
-**Prevention:** When constructing `Console`, pass `width=shutil.get_terminal_size().columns` explicitly rather than relying on auto-detection. Re-query on `SIGWINCH` equivalent (Windows Terminal sends `WM_SIZE`; polling every refresh cycle is the pragmatic fallback).
-
-**Most likely phase:** Phase 2 (Live display / dashboard rendering).
-
----
-
-### MODERATE — Unicode Emoji and Box-Drawing Characters
-
-**What goes wrong:** Rich uses Unicode box-drawing characters and emoji for progress bars and status icons. Windows Terminal (modern) handles these correctly. `cmd.exe` and older PowerShell consoles running in legacy raster fonts (Courier New) will render box-drawing as `?` or mojibake. Emoji (e.g., warning signs, clocks) fail entirely in non-UTF-8 codepages.
-
-**Warning sign:** Box characters appear as `?` or garbage; code page is not 65001 (`chcp` returns 850 or similar).
+**What goes wrong:** Chrome caches cookies in memory and only flushes to the SQLite database
+periodically or on browser close. A cookie you can see in Chrome DevTools (the live, in-memory
+value) may differ from what is in the `Cookies` database file at the moment your script reads it.
+The `sessionKey` for claude.ai may appear valid from the file but be stale if Anthropic rotated
+it in the current session.
 
 **Prevention:**
-- At startup, call `sys.stdout.reconfigure(encoding='utf-8', errors='replace')` on Windows.
-- Force the console codepage: `os.system('chcp 65001 > nul')` (acceptable for a terminal tool).
-- Use only ASCII fallbacks for critical status indicators (e.g., `[OK]` alongside checkmark emoji) so the tool degrades gracefully.
-- Document "use Windows Terminal with Cascadia Code or Consolas" as the recommended setup.
+1. After a successful web fetch with the extracted cookie, store the timestamp. If the next
+   fetch fails with HTTP 401/403, re-extract the cookie rather than assuming the stored value
+   is permanent.
+2. Implement a retry-with-reextract path: on auth failure, reload cookie from disk, retry once.
+   If still failing, surface an error rather than looping.
+3. Do not cache the extracted cookie in a config file or persistent store. Always extract fresh
+   at startup and on auth failure.
 
-**Most likely phase:** Phase 2, also Phase 3 if overage indicators use colored emoji.
-
----
-
-### MINOR — Rich Live Display Flicker in Windows Terminal
-
-**What goes wrong:** Rich's `Live` context manager uses ANSI cursor movement to update in place. In some Windows Terminal builds, rapid updates (< 100 ms refresh) produce visible flicker because the Windows conPTY layer buffers differently than a native VT terminal.
-
-**Prevention:** Set `refresh_per_second=4` (default is 4; do not go higher than 10 in the Windows-targeted build). Add a minimum sleep of 250 ms between dashboard updates.
-
-**Most likely phase:** Phase 2.
+**Phase:** Cookie extraction + web fetch integration. Both phases must understand the retry flow.
 
 ---
 
-## JSONL Parsing Pitfalls
+### MODERATE — Firefox Cookie Extraction Complexity (Key4.db + NSS Decryption)
 
-### CRITICAL — Streaming Placeholder Token Values (requestId Deduplication)
-
-**What goes wrong:** Claude Code writes JSONL entries *during* streaming, not after request completion. A single API request generates 2-10 JSONL entries sharing the same `requestId`. The first (and most) entries have `usage.input_tokens = 1` (a placeholder). The final entry has the true input count. Any parser that sums all entries without deduplicating by `requestId` will produce token counts that are 100-174x too high for input tokens and 10-17x too high for output tokens. Cache fields (`cache_creation_input_tokens`, `cache_read_input_tokens`) are set correctly from the start and do not need deduplication.
-
-This is a confirmed upstream bug (GitHub issue #22686). The upstream monitor has its own deduplication logic — when forking, verify that logic is preserved exactly.
-
-**Warning sign:** Displayed token totals are wildly higher than Anthropic Console billing figures. Cache-only sessions show reasonable numbers but mixed sessions are off.
+**What goes wrong:** Firefox cookies are not encrypted at the cookie-value level (unlike Chrome),
+but the `cookies.sqlite` is still locked when Firefox is running. More critically, if Firefox
+is the fallback path, the implementation complexity is non-trivial: NSS key derivation from
+`key4.db` is required only for passwords, not cookies. Cookie values in Firefox `cookies.sqlite`
+are plain text — but this is easy to get wrong by assuming the Chrome decryption path applies.
 
 **Prevention:**
-- Group all JSONL entries by `requestId`; use only the entry with the highest `output_tokens` value (the final streaming chunk) or the entry where `stop_reason` is non-null.
-- Add a sanity check: if computed total exceeds `5 * previous_total` within one refresh cycle, suspect a parse regression.
-- Write a unit test with a known multi-entry JSONL fixture that asserts the correct deduplicated total.
+1. For Firefox cookies, open `%APPDATA%\Mozilla\Firefox\Profiles\<random>.default\cookies.sqlite`
+   using the same URI read-only + immutable approach as Chrome.
+2. Do not apply DPAPI decryption to Firefox cookie values. They are stored as plain text in the
+   `value` column of the `moz_cookies` table. Applying decryption to them produces garbage.
+3. Use `browser-cookie3` for the Firefox path as well — it handles the profile discovery glob
+   and read-only open correctly.
 
-**Most likely phase:** Phase 1 (data pipeline). Silent until compared against actual billing.
+**Phase:** Cookie extraction fallback path. Only triggered if Chrome ABE fails.
 
 ---
 
-### CRITICAL — Windows File Sharing Violation (Claude Code Holds Write Lock)
+### MINOR — Edge Uses the Same ABE System as Chrome
 
-**What goes wrong:** On Windows, `open()` acquires an exclusive lock by default. Claude Code holds a write handle on the active session's `.jsonl` file. A Python `open(path, 'r')` call from the monitor will raise `PermissionError: [WinError 32] The process cannot access the file because it is being used by another process`.
+**What goes wrong:** Microsoft Edge is Chromium-based and introduced its own app-bound encryption
+that mirrors Chrome's. Edge cookies live in `%LOCALAPPDATA%\Microsoft\Edge\User Data\Default\Cookies`.
+Using Edge as a "fallback from Chrome" does not escape the ABE problem — you simply encounter
+it in a slightly different file path.
 
-Unix tools never encounter this because POSIX allows multiple simultaneous readers and writers on the same file descriptor.
+**Prevention:** Treat Edge as a peer to Chrome in terms of complexity, not a simpler fallback.
+If implementing Edge support, use the same ABE-aware approach as Chrome. Firefox remains the
+genuinely simpler fallback.
 
-**Warning sign:** `PermissionError` or `WinError 32` when the monitor tries to read the currently active session file. Works fine on files from completed sessions.
+**Phase:** Cookie extraction. Important when scoping browser priority.
+
+---
+
+## Area 2: Fetching claude.ai With Cookies
+
+### CRITICAL — claude.ai Is a JavaScript SPA; `requests` Returns Empty Shell HTML
+
+**What goes wrong:** `claude.ai/settings/usage` is a React single-page application. A plain
+`requests.get("https://claude.ai/settings/usage")` returns the raw HTML shell (the `<div id="root">`
+container) with no usage data. The actual usage numbers are populated by a JavaScript bundle that
+makes its own API calls after the page loads. The `requests` response will look like a valid 200
+OK with HTML, but no token counts, no plan limits, no billing data will be present in the body.
+
+**Why it happens:** React apps load data asynchronously via XHR/fetch after the initial HTML is
+delivered. `requests` executes no JavaScript.
+
+**Consequences:** The parser finds no data, returns None or empty dict, and the hybrid layer
+silently falls back to JSONL-only totals. This looks like a working feature because the app
+keeps functioning — but the web-sourced data path is completely dead.
 
 **Prevention:**
-- Open with explicit sharing flags via `msvcrt` or `win32file`:
-  ```python
-  import msvcrt, os
-  fd = os.open(path, os.O_RDONLY | os.O_BINARY)
-  # msvcrt.locking is not needed for read-only; os.O_RDONLY allows shared read
-  ```
-  Or use the `win32file` API with `FILE_SHARE_READ | FILE_SHARE_WRITE`.
-- Simpler alternative: wrap the read in a `try/except PermissionError` and skip the locked file for that refresh cycle, retrying next cycle.
-- The skip-and-retry approach matches expected UX: the active session file updates continuously anyway.
+1. Before writing any fetch code, open Chrome DevTools → Network tab → XHR filter, then
+   navigate to `claude.ai/settings/usage`. Identify the specific JSON API endpoint that the
+   page calls (likely something under `claude.ai/api/` or a similar internal REST path).
+2. If a JSON API endpoint is discoverable, hit it directly with `requests` and the session
+   cookie. This is simpler than Playwright and does not require a browser.
+3. If no direct API endpoint exists or is too fragile, use `playwright-stealth` + Playwright
+   to render the page and extract the data after `networkidle`.
+4. Document which approach was chosen and why in `STATE.md` as a key decision. This is the
+   highest-uncertainty technical question in v2.0.
 
-**Most likely phase:** Phase 1 (file reading). Surfaces immediately on first live test.
-
----
-
-### MODERATE — CRLF Line Endings in JSONL
-
-**What goes wrong:** If any tool in the pipeline (git `autocrlf`, notepad, Windows text editors) touches the `.jsonl` files, lines may end in `\r\n` instead of `\n`. `json.loads(line)` will fail on lines ending in `\r` because `\r` is included in the string and JSON does not allow bare carriage returns outside strings.
-
-**Warning sign:** `json.JSONDecodeError: Invalid control character` on lines that look visually correct.
-
-**Prevention:** Always open JSONL files with `open(path, 'r', encoding='utf-8', newline='')` and strip each line: `line.strip()` before passing to `json.loads()`. Never open in binary mode and decode manually unless you also strip `\r`.
-
-**Most likely phase:** Phase 1. Low probability if reading files written exclusively by Claude Code (which writes LF), but rises to HIGH probability once git touches the repo or anyone copies files between systems.
+**Phase:** Web fetch phase. Research (discovering the API endpoint via DevTools) must happen
+before writing any code. Do not write a `requests`-based parser without first confirming
+the endpoint exists and returns JSON.
 
 ---
 
-### MODERATE — Missing or Null Fields in Malformed Entries
+### CRITICAL — Cloudflare Bot Detection May Block Headless Python Requests
 
-**What goes wrong:** Claude Code occasionally writes truncated entries when the process is killed mid-write (power loss, `Ctrl+C`). The last line of a session file may be a partial JSON object. A `json.loads()` on a partial line raises `JSONDecodeError`. More subtly, valid JSON entries may be missing the `usage` field entirely (tool-use result entries have no usage data).
+**What goes wrong:** `claude.ai` is behind Cloudflare. Cloudflare's bot detection checks
+TLS fingerprints, HTTP/2 frame ordering, browser-specific request headers, and JavaScript
+challenge completion. A Python `requests` call with a standard `User-Agent` header has a
+distinctive TLS fingerprint that Cloudflare can identify as a non-browser client, returning
+403 or a JS challenge page even with a valid session cookie.
+
+**Confirmed instance:** GitHub issue anthropics/claude-code#39896 documents that Claude Code's
+own `WebFetch` tool fails on `claude.ai` specifically due to Cloudflare bot protection blocking
+headless domain verification requests.
+
+**Consequences:** Every web fetch attempt returns HTTP 403 or redirects to a Cloudflare
+interstitial page. The app gets no web data ever, and must fall back to JSONL permanently.
+This is not intermittent — it is consistent and user-visible.
 
 **Prevention:**
-- Wrap every `json.loads()` in `try/except json.JSONDecodeError` and skip the line.
-- After parsing, use `.get()` with defaults for all usage fields: `entry.get("message", {}).get("usage", {}).get("input_tokens", 0)`.
-- Never use `entry["message"]["usage"]["input_tokens"]` — this is a crash waiting to happen.
+1. Use `curl_cffi` instead of `requests`. `curl_cffi` uses libcurl compiled with BoringSSL and
+   can impersonate a real browser's TLS fingerprint (Chrome 120, Chrome 124, etc.), bypassing
+   most Cloudflare TLS checks: `pip install curl-cffi`.
+2. Pass realistic browser headers: `User-Agent`, `Accept`, `Accept-Language`, `Sec-Fetch-*`,
+   `sec-ch-ua`. Extract these from a real Chrome DevTools network trace.
+3. If even `curl_cffi` is blocked, use Playwright with the user's actual Chrome profile
+   (`--user-data-dir`), which already has the Cloudflare trust tokens from prior browser use.
+4. Test on the actual target machine, not in a CI environment. Cloudflare behavior differs by
+   IP reputation, and corporate networks may have different treatment than residential IPs.
 
-**Most likely phase:** Phase 1.
-
----
-
-### MINOR — UTF-8 BOM in Windows-Written Files
-
-**What goes wrong:** Windows tools (Notepad, Excel, some editors) write UTF-8 files with a BOM (`\xef\xbb\xbf`). If a user's Claude Code config path contains a file touched by such a tool, `json.loads()` will fail on the first line with `Unexpected UTF-8 BOM`.
-
-**Prevention:** Open files with `encoding='utf-8-sig'` instead of `encoding='utf-8'`. The `-sig` variant silently strips the BOM if present and is otherwise identical.
-
-**Most likely phase:** Phase 1. Rare but infuriating when it occurs.
+**Phase:** Web fetch phase. Must be the first test run before any parsing code is written.
 
 ---
 
-## Token Cost Calculation Pitfalls
+### CRITICAL — API Shape Is Undocumented and Can Change Without Notice
 
-### CRITICAL — Model Name String Matching Against Pricing Table
+**What goes wrong:** The claude.ai usage endpoint is an internal, undocumented API. Anthropic
+can change its request format, response schema, URL path, or authentication mechanism at any
+time without notice, since it is not a public API. A v2.0 feature that works today may silently
+return wrong data or crash after an Anthropic product update.
 
-**What goes wrong:** The JSONL `model` field contains full versioned model strings like `claude-sonnet-4-5-20251022` or `claude-3-5-sonnet-20241022`. Pricing tables keyed on display names like `"claude-3-5-sonnet"` will miss unless the matching uses prefix/substring logic. New model releases (Sonnet 4.6, Haiku 4.5, Opus 4.7 as of 2026) will not appear in any hardcoded table written against 2024 model names. The result is a silent `$0.00` cost for unrecognized models.
-
-**Warning sign:** Cost shows `$0.00` or unrealistically low for recent sessions. Logs show model strings that do not match any pricing table key.
+**Consequences:** After an Anthropic UI update, the web fetch returns 404 or returns data in a
+changed JSON shape. The parser raises a `KeyError` or returns None, and the app falls back to
+JSONL silently. Users see no error; data is just wrong or missing.
 
 **Prevention:**
-- Key the pricing table on model *family* prefixes and match with `model_string.startswith(prefix)`, ordered from most-specific to least-specific (e.g., `"claude-opus-4"` before `"claude-opus"`).
-- Add a fallback that logs a warning and uses a conservative "unknown model" rate rather than returning 0.
-- Include a `PRICING_LAST_UPDATED` constant and surface a UI warning when the current date is more than 90 days past it.
-- Current (2026) known families: `claude-opus-4` ($5/$25 per 1M), `claude-sonnet-4` ($3/$15), `claude-haiku-4` ($1/$5). Older families: `claude-3-5-sonnet` ($3/$15), `claude-3-haiku` ($0.25/$1.25).
+1. Wrap all web-fetch parsing in `try/except` with explicit logging of unexpected response
+   shapes. Never use `response["key"]` on undocumented API responses — always use
+   `.get("key", default)` with a fallback.
+2. Log the raw response (at DEBUG level) on every fetch so unexpected schema changes are
+   diagnosable from logs without needing a repro.
+3. Version-detect the response: check for the presence of expected keys before parsing. If keys
+   are absent, log a warning "Web data schema changed — check claude.ai API" and fall back to
+   JSONL. This surfaces the breakage to the user without crashing.
+4. When implementing, add a `WEB_DATA_SCHEMA_VERSION` constant to note the schema captured
+   during development. Include the date in a comment so staleness is detectable.
 
-**Most likely phase:** Phase 1 (pricing engine), re-surfaces every time Anthropic releases a model.
+**Phase:** Web fetch phase and ongoing maintenance. Schema changes will recur.
 
 ---
 
-### CRITICAL — Cache Token Pricing Is Not the Same as Regular Token Pricing
+### MODERATE — Session Expiry: sessionKey Cookie Has Unknown Expiration
 
-**What goes wrong:** Cache tokens have different rates: `cache_creation_input_tokens` cost 1.25x the standard input rate; `cache_read_input_tokens` cost 0.1x the standard input rate. A parser that treats all token types at the standard input rate will produce costs that are 2-10x off in cache-heavy sessions. Claude Code sessions are extremely cache-heavy (issue #24147 shows cache reads consuming 99.93% of quota in some workflows).
-
-**Warning sign:** Computed cost is consistently lower than actual Anthropic Console bill, with the gap growing the longer a session runs (more cache reads accumulate).
+**What goes wrong:** The `sessionKey` cookie on `claude.ai` expires after inactivity or an
+explicit re-auth event. The exact TTL is not publicly documented but appears to be on the order
+of days to weeks. A user who logs into Claude.ai infrequently may find their stored session
+cookie has expired by the time the tracker polls it. The failed request returns HTTP 401, the
+tracker falls back to JSONL, and the user has no idea why the web data stopped working.
 
 **Prevention:**
-- Implement separate multipliers per token type:
-  ```python
-  cost = (input_tokens * input_rate
-        + output_tokens * output_rate
-        + cache_creation_tokens * input_rate * 1.25
-        + cache_read_tokens * input_rate * 0.10)
-  ```
-- Verify against the official Anthropic pricing page; cache multipliers have not changed since 2024 but confirm before shipping.
+1. On every web fetch, check the HTTP response status. If 401 or 403, set a flag
+   `web_fetch_auth_failed = True` and display a persistent indicator in the dashboard:
+   "Web data unavailable — log into claude.ai in your browser to refresh."
+2. Re-attempt cookie extraction at each startup (not just first run) so a fresh browser
+   session automatically restores the web fetch path.
+3. Do not store the extracted cookie in a config file. Always re-extract from the browser's
+   Cookies database at startup. The browser is the source of truth for session validity.
 
-**Most likely phase:** Phase 1. The bug is invisible without a real-session comparison.
+**Phase:** Web fetch phase + hybrid data layer. The "log in again" recovery path must be
+wired before the phase is considered complete.
 
 ---
 
-### MODERATE — Floating Point Rounding in Cost Accumulation
+### MODERATE — Rate Limiting from Polling Every 5 Minutes
 
-**What goes wrong:** Accumulating `float` costs per-entry over thousands of JSONL lines accumulates rounding error. Displaying `$0.023999999` instead of `$0.024` is a cosmetic bug; the deeper risk is that threshold comparisons (`if total_cost >= budget_limit`) trigger slightly early or late due to float imprecision.
+**What goes wrong:** Polling claude.ai every 5 minutes means 288 requests per day from a single
+user. Anthropic's internal APIs likely have rate limits that are not documented. Exceeding them
+could result in temporary 429 responses, or worse, account flags on the user's Anthropic account.
 
 **Prevention:**
-- Use `decimal.Decimal` for all cost accumulation, or accumulate integer token counts and convert to cost only at display time.
-- For threshold comparisons, add a small epsilon: `if total_cost >= budget_limit - 0.0001`.
-- Display costs with `f"${cost:.4f}"` (4 decimal places) — do not round to 2 places until final display.
+1. Cache the last successful web response with a timestamp. Only issue a new HTTP request if
+   the cache is older than the configured interval (default 5 minutes). Do not bypass the cache
+   during normal operation.
+2. On a 429 response, implement exponential backoff starting at 30 seconds and increasing to a
+   max of 30 minutes. Log the backoff clearly.
+3. Consider making the polling interval user-configurable and defaulting to 15 minutes instead
+   of 5 minutes. Usage totals do not change second-by-second; 15-minute resolution is accurate
+   enough for the dashboard's purpose.
 
-**Most likely phase:** Phase 3 (overage pool indicator, where threshold comparisons matter).
-
----
-
-### MODERATE — Off-By-One on Session Boundary (5-Hour Window)
-
-**What goes wrong:** Claude Code's rate limit resets on a 5-hour rolling window. The upstream monitor infers the reset time from the timestamp of the oldest entry in the current window. If the boundary timestamp is included in both the expiring window and the new window (fence-post error), tokens are double-counted, making the "time to limit" projection too pessimistic.
-
-**Prevention:** Use strictly-less-than comparisons for window boundaries: `entry_time >= window_start` (not `>`). Write a unit test with entries exactly at the boundary timestamp.
-
-**Most likely phase:** Phase 2 (session window logic).
+**Phase:** Web fetch phase + background polling phase.
 
 ---
 
-### MINOR — Timezone Handling for Reset Time Display
+## Area 3: System Tray With pystray
 
-**What goes wrong:** JSONL timestamps are UTC ISO 8601. Displaying "resets in 2h 14m" requires converting to the user's local timezone. `datetime.utcnow()` is deprecated in Python 3.12+. Using naive datetimes and assuming local = UTC produces wrong reset times for non-UTC users.
+### CRITICAL — pystray `run()` Is Blocking; Must Not Be Called From the Main Thread If Rich Live Is Also Running There
 
-**Prevention:** Use `datetime.now(timezone.utc)` throughout. Install `tzdata` as a dependency (already listed in the upstream's Windows requirements) and use `zoneinfo.ZoneInfo` for local time conversion. Never use `datetime.utcnow()`.
+**What goes wrong:** `pystray.Icon.run()` is a blocking call that enters the Windows message
+loop (via `win32gui`). If called from the main thread, it blocks all other main-thread activity
+permanently. The existing app uses the main thread for the Rich `Live` display loop (see
+`cli/main.py`, which calls `live_display.__enter__()` and then `while True: time.sleep(1)`
+as the Windows-safe fallback for `signal.pause()`). Calling `pystray.Icon.run()` from that same
+flow would never reach the Rich loop.
 
-**Most likely phase:** Phase 2.
-
----
-
-## Editable Install / Fork Setup Pitfalls
-
-### CRITICAL — console_scripts Not on PATH After `pip install -e .`
-
-**What goes wrong:** `pip install -e .` installs scripts to `<venv>\Scripts\` (Windows) or `~/.local/bin` (Unix). On Windows, if the virtual environment's `Scripts\` directory is not in `PATH`, commands like `claude-monitor` are not found. This is the most common first-run failure for Windows users of Python CLI tools.
-
-**Warning sign:** `pip install -e .` completes with no errors, but `claude-monitor` (or your fork's command name) returns `command not found` / `is not recognized as an internal or external command`.
+**Why it happens:** The existing Windows main-loop fallback (`while True: time.sleep(1)`) is
+itself blocking. Neither pystray nor Rich's Live display will run if the other occupies the
+main thread.
 
 **Prevention:**
-- Always instruct users to activate the venv before running: `.\venv\Scripts\activate` (PowerShell) or `venv\Scripts\activate.bat` (cmd).
-- Alternatively, advise `python -m token_tracker` as a venv-safe invocation that always works.
-- In your README, show Windows-specific PATH setup for user-level installs (no venv): `py -m site --user-site` → replace `site-packages` with `Scripts`.
+1. Use `pystray.Icon.run_detached()` instead of `run()`. `run_detached()` prepares the Win32
+   message loop in background infrastructure without blocking the calling thread, then returns
+   immediately. The calling code can then proceed to the Rich Live loop. Call `icon.stop()` to
+   clean up.
+2. Do not call `pystray.Icon.run()` from a `threading.Thread`. While this works on Windows
+   (unlike macOS, where it fails), it is fragile: if the thread is a daemon thread and the main
+   thread exits, the tray icon disappears without cleanup, leaving a ghost entry in the taskbar
+   that requires an Explorer restart to clear.
+3. Recommended architecture: `run_detached()` on the main thread before entering the Rich Live
+   loop, then `icon.stop()` in the cleanup block that already calls `orchestrator.stop()`.
 
-**Most likely phase:** Phase 0 (developer setup), also Phase 4 (user documentation).
+**Phase:** System tray phase. Architecture decision must be made before any pystray code is
+written.
 
 ---
 
-### CRITICAL — Editable Install Incompatibility with Binary Extensions / Legacy Mode
+### CRITICAL — Tray Icon Image Must Be a Pillow `Image` Object, Not a File Path
 
-**What goes wrong:** If the upstream package uses a `setup.py` alongside `pyproject.toml`, `pip install -e .` on Windows may fail with `AttributeError: install_requires` or produce a broken install where the package is not importable. This is due to setuptools' new PEP 660 editable mode conflicting with legacy `setup.py develop`-style builds on Windows.
-
-**Warning sign:** `import token_tracker` fails after `pip install -e .` with no error during install. Or install raises `error: legacy-install-failure`.
+**What goes wrong:** `pystray.Icon` requires a `PIL.Image.Image` object for the `icon` parameter.
+Passing a string file path or a bytes object raises `AttributeError` or `TypeError` at icon
+creation time. Most code examples online show `Image.open("icon.png")`, but this requires the
+file to exist at that path at runtime — which it will not if the icon is a package resource
+embedded in the installed wheel.
 
 **Prevention:**
-- Use the compat workaround for the development environment: `pip install -e . --config-settings editable_mode=compat`
-- For a clean fork, migrate fully to `pyproject.toml` only (no `setup.py`) with `[build-system] requires = ["setuptools>=64"]` to get PEP 660 support.
-- Add `SETUPTOOLS_ENABLE_FEATURES=legacy-editable` to the Windows dev setup instructions as a fallback.
+1. Generate the icon programmatically using Pillow rather than loading from disk. A solid-color
+   circle or square with a letter "T" renders fine at system tray size (16x16 or 32x32) and
+   requires no file:
+   ```python
+   from PIL import Image, ImageDraw
+   def make_tray_icon(color: str) -> Image.Image:
+       img = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+       draw = ImageDraw.Draw(img)
+       draw.ellipse([4, 4, 28, 28], fill=color)
+       return img
+   ```
+2. Store the icon only as an in-memory `Image` object. Never write it to disk and read it back.
+3. To update the icon color (green/yellow/red for tray indicator), call `icon.icon = make_tray_icon("red")`
+   on the existing icon object. This updates the tray without destroying and recreating the icon.
 
-**Most likely phase:** Phase 0 (developer setup). Blocks all development if not resolved immediately.
+**Phase:** System tray phase.
 
 ---
 
-### MODERATE — Conflicting Package Name with Upstream on the Same Machine
+### MODERATE — Icon Update From the Monitoring Thread Requires Thread-Safe Access
 
-**What goes wrong:** If both the upstream `claude-code-usage-monitor` and your fork are installed in the same Python environment, import resolution is undefined. The fork may silently import upstream code. `pip list` will show both with the same module name.
-
-**Warning sign:** Code changes have no effect; the running process reports the upstream version number.
+**What goes wrong:** The monitoring orchestrator runs in `_monitor_thread` (see `orchestrator.py`
+line 54: `threading.Thread(target=self._monitoring_loop, ...)`). Calling `icon.icon = new_image`
+from inside the monitoring callback dispatches a Win32 window message from a non-main thread.
+On most Windows machines this works, but it is technically not thread-safe and can cause
+occasional flickering, crashes, or the icon update being silently dropped.
 
 **Prevention:**
-- Rename the Python package (the `name` in `pyproject.toml`) to something distinct, e.g., `token-tracker-enterprise`. Do this in Phase 0 before any other work.
-- Always develop in a dedicated virtual environment that does not have the upstream installed.
+1. Post the icon update through `icon.update_menu()` or schedule it via Python's `threading.Event`
+   rather than setting `icon.icon` directly from the callback thread.
+2. Alternatively, use a `queue.Queue`: the monitoring thread puts `("color", "red")` messages
+   into the queue, and the tray's `setup` function (which runs in its own thread per pystray's
+   design) drains the queue and applies updates.
+3. At minimum, add exception handling around icon-update calls in the monitoring callback so
+   that a tray icon error never crashes the monitoring thread.
 
-**Most likely phase:** Phase 0.
-
----
-
-### MINOR — Data Files Not Included in Editable Install
-
-**What goes wrong:** If the project includes non-Python data files (themes, config templates, pricing JSON), these may not be accessible at runtime in editable mode because `importlib.resources` resolves paths differently for editable installs vs. installed packages.
-
-**Prevention:** Use `importlib.resources.files(__package__) / "data" / "pricing.json"` (Python 3.9+) rather than `__file__`-relative paths. Test both editable and non-editable installs against the same data file access code.
-
-**Most likely phase:** Phase 1, if pricing data is externalized to a JSON file.
+**Phase:** System tray phase + background polling integration.
 
 ---
 
-## P90 Detection Pitfalls
+### MODERATE — Ghost Tray Icon on Unclean Exit
 
-### CRITICAL — Cold Start With Insufficient History (< 10 Sessions)
-
-**What goes wrong:** P90 is meaningless with fewer than 10 data points. `numpy.percentile([500], 90)` returns `500` — the single observation — and the system interprets this as the "normal" limit. On first run or after clearing history, the P90 detector sees only 1-3 sessions and sets an artificially low (or high) dynamic limit, causing false-positive overage warnings or missed warnings throughout early use.
-
-**Warning sign:** The overage pool indicator triggers on day 1 with only a single session in history. Or the indicator never triggers even during genuinely heavy usage in the first week.
+**What goes wrong:** If the application exits without calling `icon.stop()`, the Win32 window
+that backs the tray icon is destroyed but the system tray notification area on the Windows
+taskbar retains the ghost icon until the user moves their mouse over it. This is a known Windows
+behavior (the tray only repaints on mouse hover). Users see a stuck icon in the tray.
 
 **Prevention:**
-- Enforce a minimum sample size (recommended: 10 sessions, 3 days of history) before activating P90-based limits.
-- During the bootstrap period, display a "calibrating..." state rather than a threshold indicator.
-- Persist session history to disk (`~/.token-tracker/history.json` on Windows: `%APPDATA%\token-tracker\history.json`) so history survives process restarts.
+1. Call `icon.stop()` in the `finally` block in `cli/main.py`. The existing code already has a
+   `finally: restore_terminal(...)` section — add `icon.stop()` immediately before or after
+   `orchestrator.stop()`.
+2. Register a signal handler for `SIGTERM` (on Windows: `signal.CTRL_C_EVENT` and
+   `signal.CTRL_BREAK_EVENT`) that calls `icon.stop()` before exiting.
+3. Handle the tray icon's own "Exit" menu item: `icon.stop()` must be called in the menu
+   action, and `icon.stop()` must also signal the main loop to exit (e.g., by setting the
+   same `_stop_event` that the orchestrator uses).
 
-**Most likely phase:** Phase 3 (P90 / overage pool feature). First-use experience.
+**Phase:** System tray phase. Cleanup path is as important as the happy path.
 
 ---
 
-### CRITICAL — Outlier Sessions Permanently Skewing P90
+### MINOR — Pillow Dependency Adds 20–50 MB to the Install
 
-**What goes wrong:** A single outlier session (e.g., a 4-hour deep-research session using 10x normal tokens) raises the P90 significantly. If the history window is unbounded, this outlier persists indefinitely, making the "normal" threshold too lenient and hiding future overages. Conversely, a one-time light-usage period (vacation) can make the threshold too strict.
+**What goes wrong:** Pillow brings in JPEG/PNG/TIFF codec binaries. On a fresh venv, `pip install
+pillow` adds approximately 20-50 MB. For a tool that generates its icon programmatically, this
+is more than strictly necessary. This is not a functional pitfall but a dependency weight one.
 
-**Warning sign:** P90 threshold drifts upward over months without genuine usage pattern change. Users report the overage indicator stops triggering despite clearly heavy sessions.
+**Prevention:** Accept the dependency. The alternatives (using a `.ico` file, using ctypes to
+draw directly into an HICON, or using `wand`) are all more complex and more fragile. Pillow is
+already a standard Pythonic image dependency and pystray documentation explicitly uses it in all
+examples.
+
+**Phase:** System tray phase. Note the dependency in the phase plan so it is not a surprise.
+
+---
+
+## Area 4: Background Polling Thread
+
+### CRITICAL — Rich Live `update()` Called From a Background Thread Can Corrupt the Display
+
+**What goes wrong:** The existing monitoring orchestrator calls `on_data_update` (registered in
+`cli/main.py`) from inside `_monitoring_loop`, which runs in `_monitor_thread`. Inside
+`on_data_update`, `live_display.update(renderable)` is called. Rich's `Live` class uses an
+internal `RLock` (`_lock`) to serialize renders. Calling `update()` from a non-main thread is
+the documented thread-safe usage pattern for Rich. However, there is a confirmed bug
+(Textualize/rich#1530) where concurrent `console.print()` calls and `Live` updates from
+different threads can produce garbled output — lines interleaved, escape sequences incomplete.
+
+**Why it happens:** The existing code already does this (v1.0 works this way), so this is an
+existing pattern. The v2.0 risk is that the web fetch thread adds a third thread (`_monitor_thread`
++ potential `_web_fetch_thread`) calling `update()` approximately simultaneously. Double-update
+at near the same time can overflow the render lock acquisition.
 
 **Prevention:**
-- Use a rolling window of the last 30 calendar days (or last 100 sessions, whichever is smaller) — not all-time history.
-- Optionally apply a mild outlier filter: exclude sessions above P99 before computing P90 (compute P99 first, exclude, then recompute P90 on the remaining population).
-- Display the current P90 value and the number of sessions it is based on in the UI so users can sanity-check it.
+1. Keep exactly one thread responsible for calling `live_display.update()`. The monitoring
+   orchestrator's callback is already that thread. Do not create a separate web-fetch thread
+   that also calls `update()`.
+2. Merge the web fetch result into the monitoring data dict inside `_fetch_and_process_data()`
+   before the single `on_data_update()` callback fires. The web fetch should be a synchronous
+   call inside the monitoring loop, not a parallel thread.
+3. If the web fetch is slow (Playwright startup, Cloudflare challenge), add a timeout
+   (`requests` supports `timeout=10`, Playwright supports `page.goto(timeout=10000)`) so the
+   monitoring loop never blocks indefinitely waiting for the web fetch.
 
-**Most likely phase:** Phase 3. Invisible until weeks of real usage accumulate.
+**Phase:** Background polling + web fetch integration phase.
 
 ---
 
-### MODERATE — Stale History After Plan Tier Change
+### CRITICAL — Unhandled Exception in the Monitoring Thread Silently Kills It
 
-**What goes wrong:** A user upgrades from Pro to Max (or their company moves to a Team plan with a larger pool). Their historical P90 was calibrated against the old limit. The new plan allows higher usage, but the P90 threshold still reflects old conservative patterns. The overage indicator will never trigger even at 90% of the new, larger limit.
-
-**Warning sign:** User upgrades plan; overage indicator becomes permanently silent.
+**What goes wrong:** The monitoring thread is a daemon thread (`daemon=True`, line 56 in
+`orchestrator.py`). If `_monitoring_loop` raises an unhandled exception, the thread terminates
+silently. `_monitoring: bool` stays `True`, `_monitor_thread.is_alive()` returns `False`, but
+the UI continues to display the last rendered frame indefinitely. The user sees a frozen dashboard
+that shows no error. This is the existing behavior for v1.0 and becomes more likely in v2.0
+because the web fetch path introduces new failure modes (SQLite errors, HTTP errors, Cloudflare
+blocks, JSON parse errors).
 
 **Prevention:**
-- Detect plan-tier changes (e.g., when the JSONL-reported limit changes materially) and prompt the user to reset the P90 calibration window.
-- Alternatively, expose a `/reset-calibration` CLI command or a config flag `--reset-p90-history`.
+1. The existing `_fetch_and_process_data` already has a broad `except Exception as e` at its
+   outer layer (line 227). Verify this covers all new web fetch code paths — do not leave any
+   code outside this exception fence.
+2. Add a watchdog: after `orchestrator.start()`, periodically check
+   `orchestrator._monitor_thread.is_alive()`. If the thread has died, surface a UI error row
+   ("Monitoring stopped — restart the app") instead of showing a frozen last-state dashboard.
+3. Add exception logging in the web fetch code specifically. HTTP errors and JSON parse errors
+   must be caught, logged, and converted to a `WebFetchResult(success=False, error="...")` value
+   rather than raised as exceptions that reach the monitoring loop's outer handler.
 
-**Most likely phase:** Phase 3. Edge case but important for the company-plan overage pool feature specifically.
-
----
-
-### MODERATE — Different Interpolation Methods Across Environments
-
-**What goes wrong:** `numpy.percentile()`, `statistics.quantiles()`, and `pandas.quantile()` use different default interpolation methods (`linear`, `inclusive`/`exclusive`, `linear` respectively). On small samples (n < 30), these produce meaningfully different P90 values. If the implementation switches libraries between environments (e.g., numpy not installed → falls back to statistics), the threshold shifts invisibly.
-
-**Prevention:** Pin to a single implementation. Recommend `numpy.percentile(data, 90, interpolation='linear')` and list numpy as a hard dependency. Do not use `statistics.quantiles()` for this feature — it requires `n >= 2` and produces coarser results.
-
-**Most likely phase:** Phase 3.
+**Phase:** Background polling phase. The watchdog should be added before v2.0 ships.
 
 ---
 
-### MINOR — P90 of What, Exactly?
+### MODERATE — Web Fetch Timeout Blocks the Monitoring Loop
 
-**What goes wrong:** "P90 of token usage" is ambiguous: P90 of tokens-per-session? tokens-per-hour? tokens-per-day? tokens-per-5-hour-window? Using the wrong granularity produces a threshold that does not correspond to the rate limit being protected. Claude Code rate limits are per-5-hour-window, so a daily P90 is the wrong unit.
+**What goes wrong:** The monitoring loop calls `_fetch_and_process_data()` synchronously every
+`update_interval` seconds. If the web fetch (Playwright startup + page render + data extraction)
+takes 15–30 seconds, the entire monitoring loop stalls. No JSONL data is refreshed during this
+time. The dashboard appears frozen. This is especially bad on first startup, when Playwright
+launches a fresh browser instance.
 
-**Prevention:** Explicitly define P90 as the 90th percentile of *total tokens consumed in a 5-hour window* across recent history. Annotate the variable with a docstring stating this definition. Display the unit in the UI: "P90 limit: 142,000 tokens / 5-hour window."
+**Prevention:**
+1. Run the web fetch on a dedicated thread or use Python `concurrent.futures.ThreadPoolExecutor`
+   with a `Future.result(timeout=15)` timeout so the monitoring loop can proceed with JSONL-only
+   data if the web fetch takes too long.
+2. Cache the last successful web result. On each monitoring loop iteration, use the cached value
+   if it is fresh enough; only start a new web fetch when the cache is stale. This decouples web
+   fetch latency from display update latency.
+3. Design the web fetch as a "fire and forget, use result when available" operation: the
+   monitoring loop publishes an update with whatever web data is currently available (even
+   if stale), and the web fetch result is merged in asynchronously when it completes.
 
-**Most likely phase:** Phase 3 design / specification.
+**Phase:** Web fetch + background polling integration phase.
+
+---
+
+### MODERATE — Graceful Shutdown Must Stop All Three Components in the Right Order
+
+**What goes wrong:** v2.0 adds the tray icon as a third component alongside the monitoring
+thread and Rich Live display. The existing `finally` block in `cli/main.py` stops the orchestrator
+and exits the Live context. If the tray icon's event loop is not stopped before `sys.exit()`,
+Win32 message pump teardown can race with Python's interpreter shutdown, producing an
+`AttributeError: 'NoneType' object has no attribute ...` during garbage collection, or leaving
+the ghost icon in the tray.
+
+**Prevention:**
+1. Shutdown order: `icon.stop()` → `orchestrator.stop()` → `live_display.__exit__()` →
+   `restore_terminal()`. Stop the tray first because its Win32 message loop runs independently.
+2. The tray icon's "Exit" menu item must trigger the same shutdown sequence as Ctrl+C. Use
+   a `threading.Event` shared between the tray action and the main loop to signal "exit
+   requested" without calling `sys.exit()` from inside the tray callback (which is unsafe in
+   a message handler context).
+3. Wrap every component's stop call in `contextlib.suppress(Exception)` (the existing code
+   already does this for the Live display). Extend the same pattern to `icon.stop()`.
+
+**Phase:** System tray + shutdown integration phase.
+
+---
+
+## Area 5: Hybrid Data Merging
+
+### CRITICAL — Web Totals and JSONL Totals Will Diverge; No Clear Tie-Breaking Rule
+
+**What goes wrong:** The claude.ai web API reports authoritative usage totals. The local JSONL
+logs provide per-project breakdown but are approximations due to streaming deduplication
+complexity, costUSD field removal, and session boundary ambiguity. When both sources are present,
+they will report different total token counts. Without a documented tie-breaking rule, the display
+code will either show two conflicting numbers or silently pick one, leading to user confusion.
+
+**Specific divergence sources:**
+- Web total includes all platforms (Claude.ai web, Claude Code, API); JSONL only has Claude Code
+  local sessions
+- JSONL deduplication may miss edge cases the web API handles server-side
+- Clock skew between when a session ends and when the web API reflects it (likely eventual
+  consistency)
+
+**Prevention:**
+1. Define the authoritative source for each data type before writing any merge code:
+   - Plan limits (tokens/month): web only (JSONL has no plan limit data)
+   - Aggregate usage total: web only (authoritative billing source)
+   - Per-project breakdown: JSONL only (web does not provide this)
+   - INCLUDED/OVERAGE status: derived from web totals against web plan limit
+2. The hybrid merge should not "blend" totals — it should use each source for the data type
+   it exclusively owns. There is no valid reason to average or sum across both sources.
+3. If the web fetch fails, display the JSONL total with an explicit "(estimated — web data
+   unavailable)" annotation. Do not silently substitute one for the other without labeling it.
+4. Log any large divergence (>10%) between web total and JSONL total at WARNING level to aid
+   future debugging.
+
+**Phase:** Hybrid data layer phase. This architectural rule must be documented as a decision in
+`STATE.md` before the merge code is written.
+
+---
+
+### MODERATE — Web Fetch Failure Must Degrade Gracefully, Not Crash the Dashboard
+
+**What goes wrong:** The existing dashboard was built on JSONL-only data. In v2.0, if web fetch
+is absent (Cloudflare blocked, session expired, Playwright not installed), the dashboard must
+still function. If any v2.0 display code assumes `web_data is not None`, a `None` dereference
+will crash the display update callback, leaving the dashboard frozen on the last rendered frame.
+
+**Prevention:**
+1. Design the `WebFetchResult` as an explicit optional: either a `WebFetchResult(success=True,
+   plan_limit=..., total_tokens=...)` or a `WebFetchResult(success=False, error="...",
+   plan_limit=None, total_tokens=None)`.
+2. All display code that consumes web data must handle the `success=False` case explicitly. Use
+   Python's `Optional` type hints throughout and treat `None` web fields as "show JSONL estimate
+   with disclaimer" rather than "crash".
+3. Add a unit test that simulates a `WebFetchResult(success=False)` and asserts the dashboard
+   renders without error.
+
+**Phase:** Hybrid data layer phase and display update phase.
+
+---
+
+### MINOR — Web Total Is Monthly; JSONL Is Session-Window-Based
+
+**What goes wrong:** The existing v1.0 dashboard is built around 5-hour rolling session windows.
+The claude.ai usage API (if it exposes what the settings page shows) is likely monthly billing
+totals. Mixing these two time granularities in the same display row creates confusion: "You've
+used 120,000 tokens (monthly total) out of 500,000 (monthly plan limit)" displayed next to
+"Current session: 45,000 tokens" is coherent, but the code must never divide one by the other
+or compare them directly.
+
+**Prevention:**
+1. Use separate variables for monthly totals (from web) and session totals (from JSONL).
+   Never add them together.
+2. The pool-spend display (v1.0 feature) was built on session-window logic. In v2.0, replace or
+   supplement that calculation with the monthly total from the web API if available.
+3. Add comments to any code that performs a calculation involving tokens, noting explicitly
+   whether the token count is session-scoped or monthly-scoped.
+
+**Phase:** Hybrid data layer phase. Document in code via type annotations or explicit variable
+naming (`monthly_tokens_used` vs `session_tokens_used`).
+
+---
+
+## Area 6: Monthly Reset on the 1st
+
+### MODERATE — Timezone of the Monthly Reset Is Unknown and Machine-Dependent
+
+**What goes wrong:** Anthropic's billing cycle likely resets at midnight on the 1st in a
+specific timezone (most likely UTC or US/Pacific). The user's machine may be in a different
+timezone. If the code uses `datetime.now().day == 1` to detect the reset, it triggers the reset
+at local midnight on the 1st, which may be hours before or after Anthropic's actual reset.
+During this gap, the JSONL-based pool spend and the web-reported total will diverge in a way
+that looks like a bug.
+
+**Prevention:**
+1. Use UTC for all monthly reset calculations internally. `datetime.now(timezone.utc).day == 1`
+   is the correct form. Never use naive `datetime.now().day`.
+2. Make the reset timezone configurable (add `billing_reset_timezone: "UTC"` to config.json
+   with UTC as default). If the user knows their plan resets in US/Pacific, they can set it.
+3. The pool_spend persistence (the existing `pool_spend.json` cache from v1.0) already has a
+   `billing_period_start` field. Verify that the reset logic uses this field rather than
+   recomputing from `datetime.now()` on every startup, which would cause incorrect resets if
+   the tool is started on the 1st but after Anthropic has already reset.
+
+**Phase:** Monthly reset phase. This is a subtle edge case that is invisible until the 1st of
+the month.
+
+---
+
+### MODERATE — "Last Day of the Month" Edge Cases
+
+**What goes wrong:** February has 28 or 29 days. Months have 28, 30, or 31 days. Code that
+assumes "the current billing period started on `billing_start_day` of this month" will fail when
+`billing_start_day = 29`, `30`, or `31` and the current month has fewer days. The calculation
+`datetime(current_year, current_month, billing_start_day)` will raise `ValueError: day is out of
+range for month`.
+
+**Prevention:**
+1. Use `min(billing_start_day, calendar.monthrange(year, month)[1])` when constructing the
+   billing period start date.
+2. Write unit tests for February with billing start day 30 and 31.
+3. The existing `pool_state_manager.py` likely already handles this; verify it does before
+   adding any new monthly-reset code that duplicates the billing period calculation.
+
+**Phase:** Monthly reset phase. Check existing `pool_state_manager.py` first.
+
+---
+
+### MINOR — Midnight Reset Creates a Double-Count Window
+
+**What goes wrong:** At exactly midnight on the 1st (in the reset timezone), the billing period
+flips from month N to month N+1. If the monitoring loop fires at 11:59 PM and again at 12:01 AM,
+the pool spend may accumulate in the old period's cache for the 11:59 run and then reset to zero
+for the 12:01 run. If both runs happen before the UI refreshes, the user sees the pool spend jump
+from some value to zero without the intermediate reset being visible.
+
+**Prevention:** This is cosmetic — the data is correct. Accept it and document it. The reset is
+correct; the visual discontinuity is a display artifact of the 5-minute polling interval.
+
+**Phase:** Not a blocker. Document as known behavior.
 
 ---
 
 ## Phase-Specific Warning Summary
 
-| Phase | Topic | Highest-Risk Pitfall | Mitigation |
-|-------|-------|----------------------|------------|
-| 0 | Fork setup | Conflicting package name | Rename in `pyproject.toml` first |
-| 0 | Dev environment | Editable install failure (PEP 660) | Use `editable_mode=compat` or pure `pyproject.toml` |
-| 1 | File discovery | Wrong AppData path for JSONL logs | `sys.platform` branch to AppData path |
-| 1 | File reading | `WinError 32` file sharing violation | `try/except PermissionError` + skip-and-retry |
-| 1 | Token parsing | requestId deduplication (100x overcounts) | Deduplicate by requestId, use final entry only |
-| 1 | Cost engine | Model name mismatch → $0 cost | Prefix-match pricing table + unknown-model warning |
-| 1 | Cost engine | Cache tokens at wrong rate | Separate multipliers per token type |
-| 2 | Dashboard | No color in cmd.exe | Enable VTP at startup via ctypes |
-| 2 | Dashboard | Width auto-detection fallback (80 cols) | Pass explicit width to Console constructor |
-| 2 | Dashboard | Unicode rendering in legacy terminals | `chcp 65001` + ASCII fallbacks |
-| 2 | Session window | Off-by-one on 5-hour boundary | Strictly-less-than comparisons + unit test |
-| 3 | P90 feature | Cold start with 1-3 sessions | Min 10 sessions before activating threshold |
-| 3 | P90 feature | Outliers skewing threshold upward | Rolling 30-day window + P99 outlier exclusion |
-| 3 | Overage pool | Plan tier change invalidates history | Detect limit change, prompt re-calibration |
+| Phase Topic | Highest-Risk Pitfall | Mitigation |
+|-------------|----------------------|------------|
+| Cookie extraction | Chrome v127+ ABE breaks simple DPAPI | Use browser-cookie3 v0.19.1+; Firefox fallback |
+| Cookie extraction | SQLite lock while Chrome open | URI read-only + immutable=1 |
+| Web fetch | claude.ai is SPA; requests returns empty HTML | Discover JSON API via DevTools first |
+| Web fetch | Cloudflare blocks headless Python | Use curl_cffi with browser TLS impersonation |
+| Web fetch | Undocumented API schema can change | Wrap all parsing in .get() with fallbacks |
+| Web fetch | Session expiry returns 401 | Re-extract on auth failure; show UI indicator |
+| System tray | pystray run() blocks main thread | Use run_detached(); never run() on main thread |
+| System tray | Ghost icon on unclean exit | Call icon.stop() in finally block |
+| System tray | Tray icon update from wrong thread | Post updates via queue, not direct assignment |
+| Background polling | Web fetch blocks monitoring loop | Cache web result; use timeout on fetch |
+| Background polling | Unhandled exception kills thread silently | Outer except already exists; extend to web paths |
+| Background polling | Three-component shutdown ordering | icon.stop() → orchestrator.stop() → live.__exit__ |
+| Hybrid data | JSONL and web totals diverge | Define authoritative source per data type upfront |
+| Hybrid data | Web failure crashes display | Explicit WebFetchResult optional type; test None case |
+| Monthly reset | Reset timezone mismatch | UTC internally; configurable in config.json |
+| Monthly reset | billing_start_day > 28 in short months | calendar.monthrange() clamp |
 
 ---
 
@@ -412,37 +648,31 @@ Unix tools never encounter this because POSIX allows multiple simultaneous reade
 
 | Area | Confidence | Basis |
 |------|------------|-------|
-| Path handling (Windows AppData) | HIGH | Official Python docs + confirmed Claude Code log location from multiple tools |
-| Rich Windows rendering (ANSI, width) | HIGH | Confirmed Rich GitHub issues #135, #1640, #3412 + official Rich docs |
-| JSONL requestId deduplication bug | HIGH | Confirmed upstream GitHub issues #22686 and #5034 on anthropics/claude-code |
-| Windows file sharing violation | HIGH | Confirmed Python discussion thread + WinError 32 documentation |
-| Cache token pricing multipliers | HIGH | Official Anthropic pricing page + confirmed community analysis |
-| Model name matching | MEDIUM | Inferred from observed model string format in JSONL + current pricing table; model names change with new releases |
-| P90 cold start / outlier behavior | MEDIUM | Standard statistical practice; not project-specific documentation |
-| Editable install / PEP 660 failure | MEDIUM | Confirmed setuptools GitHub issues; Windows-specific failure rate varies by Python version |
-| P90 granularity (5-hour window) | MEDIUM | Inferred from Claude Code rate limit architecture; verify against actual limit reset behavior |
-| Float rounding in cost accumulation | LOW | Standard floating-point best practice; no observed incident in this codebase specifically |
+| Chrome v127 app-bound encryption | HIGH | Multiple security research sources; confirmed Chrome v127 Jul 2024; RedCanary analysis |
+| SQLite lock while Chrome open | HIGH | Confirmed pycookiecheat issue #29 + SQLite forum; read-only URI mode documented |
+| claude.ai is SPA | HIGH | React SPA is visible from page source; confirmed by Cloudflare issue #39896 in claude-code repo |
+| Cloudflare blocking | HIGH | Confirmed in anthropics/claude-code#39896 (WebFetch fails on claude.ai) |
+| pystray run() blocking + run_detached() | HIGH | pystray official docs 0.19.5 explicitly state this |
+| Rich Live thread safety | MEDIUM | Confirmed issue Textualize/rich#1530; mitigations are documented workarounds |
+| Web API schema stability | MEDIUM | Inferred from general internal-API risk; no specific incident documented |
+| Cookie staleness | MEDIUM | Standard browser behavior; no claude.ai-specific incident documented |
+| Monthly reset timezone | MEDIUM | Standard billing practice; Anthropic's specific reset timezone not publicly documented |
+| Ghost tray icon | MEDIUM | pystray issue #94 and #17 discuss shutdown; Windows behavior is well-known |
 
 ---
 
 ## Sources
 
-- [Claude Code JSONL Logs Undercount Tokens by 100x](https://gille.ai/en/blog/claude-code-jsonl-logs-undercount-tokens/)
-- [BUG: Output tokens incorrectly recorded in JSONL](https://github.com/anthropics/claude-code/issues/22686)
-- [BUG: Duplicate entries in session .jsonl files](https://github.com/anthropics/claude-code/issues/5034)
-- [BUG: Token Usage Statistics Duplicated in stream-json Mode](https://github.com/anthropics/claude-code/issues/6805)
-- [Cache read tokens consume 99.93% of usage quota](https://github.com/anthropics/claude-code/issues/24147)
-- [Rich: BUG Incorrect auto detection of terminal size on Windows #3412](https://github.com/Textualize/rich/issues/3412)
-- [Rich: Texts isn't rendering correctly on Windows #135](https://github.com/Textualize/rich/issues/135)
-- [Rich: Need better detection of terminal color capabilities #1640](https://github.com/Textualize/rich/issues/1640)
-- [os.path.expanduser should not use HOME on Windows](https://github.com/python/cpython/issues/80445)
-- [Snakemake: Cross-platform path handling str(Path) breaks shell commands on Windows](https://github.com/snakemake/snakemake/issues/3637)
-- [Windows WinError 32 file sharing violation - Python Corner](https://medium.com/the-python-corner/python-how-to-open-a-file-on-windows-without-locking-it-24aea308a738)
-- [setuptools Editable Installs PEP 660 documentation](https://setuptools.pypa.io/en/latest/userguide/development_mode.html)
-- [pip install editable mode fails after pyproject.toml](https://github.com/pypa/setuptools/issues/3606)
-- [Anthropic Pricing (official)](https://platform.claude.com/docs/en/about-claude/pricing)
-- [Rich Console API documentation](https://rich.readthedocs.io/en/stable/console.html)
-- [Enabling ANSI Colors in Windows CMD](https://sqlpey.com/c/enabling-ansi-colors-windows-cmd/)
-- [Python pathlib Cookbook](https://miguendes.me/python-pathlib)
-- [Claude-Code-Usage-Monitor upstream repository](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor)
-- [Team Plan not supported issue #193](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor/issues/193)
+- [Chrome App-Bound Encryption Analysis — RedCanary](https://redcanary.com/blog/threat-intelligence/google-chrome-app-bound-encryption/)
+- [Chrome-App-Bound-Encryption-Decryption (research)](https://github.com/xaitax/Chrome-App-Bound-Encryption-Decryption)
+- [pycookiecheat: database is locked issue #29](https://github.com/n8henrie/pycookiecheat/issues/29)
+- [Python Tutorials: Safely Open Locked SQLite Database](https://www.pythontutorials.net/blog/is-it-possible-to-open-a-locked-sqlite-database-in-read-only-mode/)
+- [WebFetch fails on claude.ai — Cloudflare blocks headless (anthropics/claude-code#39896)](https://github.com/anthropics/claude-code/issues/39896)
+- [pystray docs: Creating a system tray icon (0.19.5)](https://pystray.readthedocs.io/en/latest/usage.html)
+- [pystray: Icon.stop() threading issue #94](https://github.com/moses-palmer/pystray/issues/94)
+- [pystray: terminate from tray menu #17](https://github.com/moses-palmer/pystray/issues/17)
+- [Rich: Live display not thread safe #1530](https://github.com/willmcgugan/rich/issues/1530)
+- [Rich: Console not terminal in background thread #2665](https://github.com/Textualize/rich/issues/2665)
+- [Anthropic Privacy: What Cookies Does Anthropic Use?](https://privacy.claude.com/en/articles/10023541-what-cookies-does-anthropic-use)
+- [Decrypt Chrome v20 cookies with appbound protection (gist)](https://gist.github.com/thewh1teagle/d0bbc6bc678812e39cba74e1d407e5c7)
+- [How to Stop a Python Thread Cleanly — Alexandra Zaharia](https://alexandra-zaharia.github.io/posts/how-to-stop-a-python-thread-cleanly/)
