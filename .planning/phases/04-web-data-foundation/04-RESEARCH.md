@@ -937,22 +937,25 @@ else:
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **five_hour.utilization scale when non-zero**
    - What we know: Only seen `0.0` (no active session) in spike. `extra_usage.utilization` confirmed as 0–100 scale.
    - What's unclear: Whether `five_hour.utilization` uses 0–100 or 0–1 scale when an active session exists.
    - Recommendation: Assume 0–100 (matches extra_usage scale and is the more common API design). Add a `# ASSUMED: 0-100 scale` comment and log the raw value at DEBUG so it's catchable.
+   - **RESOLVED:** Assume 0–100 scale (same as extra_usage, confirmed by spike math). fetch_web_usage() already adds `# ASSUMED: 0-100 scale` comment on the five_hour.utilization read line. If observed values are wrong at runtime, the DEBUG log of the raw response will expose the discrepancy immediately.
 
 2. **"Resets in:" display for Teams plan users**
    - What we know: `five_hour.resets_at` is present for Max/Pro plans. Teams accounts have no 5-hour window and no `resets_at` in API response.
    - What's unclear: What time should "Resets in:" show for Teams users — billing cycle end or nothing?
    - Recommendation: For Teams (extra_usage path), show "Resets: {billing_cycle_reset_date}" (month/day) instead of a countdown. This is Claude's Discretion territory.
+   - **RESOLVED:** For Teams/extra_usage path, `reset_at` is derived from billing cycle config via `_derive_billing_cycle_reset(config_dir)`. The display shows the billing cycle reset date formatted as "Resets: MM/DD" rather than a hours countdown. When `reset_at` comes from config (not API), `_derive_billing_cycle_reset()` computes the next billing cycle day and returns it as a datetime; the display layer computes days remaining rather than hours.
 
 3. **D-10 stale key detection in WebPoller context**
    - What we know: D-10 specifies re-prompt on first API call of new session returning 401/403.
    - What's unclear: How does the WebPoller signal main thread to show the interactive prompt? WebPoller runs in a daemon thread; `input()` from a daemon thread is unsafe.
    - Recommendation: WebPoller should set a flag (`stale_key_detected`) that cli/main.py's main loop checks and handles by stopping the live display, prompting, then restarting.
+   - **RESOLVED:** D-10 is scoped to startup-time only. `_setup_auth()` in cli/main.py calls `_discover_org_id(session_key)` immediately after reading sessionKey from keyring. If `_discover_org_id()` returns None (indicating a 401/403 response from the API), `_setup_auth()` calls `keyring.delete_password("claude-monitor", "sessionKey")` (wrapped in `try/except keyring.errors.PasswordDeleteError: pass`), logs "auth: stale sessionKey cleared — re-prompting", then loops back to the D-08 console paste prompt. This avoids cross-thread signaling entirely — all stale-key handling happens before the Rich Live context opens and before WebPoller starts. In-session stale-key detection from WebPoller (cross-thread re-prompt while display is live) is deferred to a future phase.
 
 ---
 

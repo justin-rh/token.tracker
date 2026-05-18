@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Web-Sourced Usage + System Tray
-status: planning
+status: executing
 stopped_at: ~
-last_updated: "2026-05-18T00:00:00.000Z"
+last_updated: "2026-05-18T01:00:00.000Z"
 last_activity: 2026-05-18
 progress:
   total_phases: 3
   completed_phases: 0
-  total_plans: 0
+  total_plans: 6
   completed_plans: 0
   percent: 0
 ---
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Know instantly whether you're on included tokens or burning the $500 overage pool — and how fast.
-**Current focus:** Milestone v2.0 roadmap defined — ready to plan Phase 4
+**Current focus:** Phase 4 planned (6 plans) — ready to execute
 
 ## Current Position
 
-Phase: Phase 4 — Web Data Foundation (not started)
+Phase: Phase 4 — Web Data Foundation (ready to execute)
 Plan: —
-Status: Roadmap complete, awaiting phase planning
-Last activity: 2026-05-18 — v2.0 roadmap written (Phases 4–6)
+Status: Planning complete — 6 plans in 5 waves
+Last activity: 2026-05-18 — Phase 4 planned (6 plans, verification passed)
 
 ## Progress Bar
 
@@ -71,13 +71,15 @@ v2.0: [                              ] 0% (0/3 phases)
 
 ### Pending Todos
 
-- Plan Phase 4 (`/gsd-plan-phase 4`)
+- Execute Phase 4 (`/gsd-execute-phase 4`)
 
 ### Blockers/Concerns
 
-- Cloudflare may block httpx on claude.ai — Phase 4 plan must spike this FIRST
+- ~~Cloudflare may block httpx on claude.ai~~ **RESOLVED (spike 2026-05-18): Cloudflare NOT blocking; urllib.request + httpx both work; curl_cffi NOT needed**
 - Chrome App-Bound Encryption (v127+) may block browser-cookie3 on Chrome/Edge — Firefox-first, manual fallback mandatory
 - claude.ai API schema has no stability guarantee — use `.get("key", default)` everywhere; log raw response at DEBUG
+- **Teams/Enterprise accounts**: `five_hour` field is null; use `extra_usage.utilization` instead. `extra_usage` monetary fields are in cents (not tokens). Both branches handled in 04-02 plan.
+- **session_key currently in plaintext config.json** — 04-06 plan migrates it to keyring on first run (D-04)
 
 ## Deferred Items
 
