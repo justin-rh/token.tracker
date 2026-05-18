@@ -4,14 +4,14 @@ milestone: v2.0
 milestone_name: Web-Sourced Usage + System Tray
 status: executing
 stopped_at: ~
-last_updated: "2026-05-18T23:39:29Z"
+last_updated: "2026-05-18T23:47:29Z"
 last_activity: 2026-05-18
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 6
-  completed_plans: 1
-  percent: 17
+  completed_plans: 2
+  percent: 33
 ---
 
 # Project State
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 ## Current Position
 
 Phase: Phase 4 — Web Data Foundation (executing)
-Plan: 04-02 (next)
-Status: Plan 04-01 complete — 1/6 plans done
-Last activity: 2026-05-18 — 04-01 complete (deps + WebUsageData)
+Plan: 04-03 (next)
+Status: Plan 04-02 complete — 2/6 plans done
+Last activity: 2026-05-18 — 04-02 complete (auth refactor + fetch_web_usage + unit tests)
 
 ## Progress Bar
 
 ```
-v2.0: [=====                         ] 17% (1/6 plans, 0/3 phases)
+v2.0: [==========                    ] 33% (2/6 plans, 0/3 phases)
 ```
 
 ## Accumulated Context
@@ -49,6 +49,9 @@ v2.0: [=====                         ] 17% (1/6 plans, 0/3 phases)
 - v2.0: Phase 4 MUST spike Cloudflare + cookie extraction on the actual machine before writing any parsing code
 - v2.0: curl_cffi is a conditional dep — add only if httpx is blocked by Cloudflare; do not pre-add
 - v2.0 04-01: plan_limit_tokens is Optional[int] — None for Teams/Enterprise where API returns monthly_limit in cents (not tokens)
+- v2.0 04-02: _read_auth_cookies() follows keyring(1) > Firefox(2) > Chrome(3) — D-06 implemented; session_key value never logged
+- v2.0 04-02: five_hour.utilization assumed 0-100 scale (same as extra_usage; ASSUMED comment added); only seen 0.0 in spike
+- v2.0 04-02: Teams reset_at derived from billing_cycle_start_day config (no API resets_at for Teams extra_usage branch)
 
 ### Architecture Notes
 
@@ -92,6 +95,6 @@ v2.0: [=====                         ] 17% (1/6 plans, 0/3 phases)
 
 ## Session Continuity
 
-Last session: 2026-05-18T23:39:29Z
-Stopped at: Completed 04-01-PLAN.md
-Resume file: .planning/phases/04-web-data-foundation/04-02-PLAN.md
+Last session: 2026-05-18T23:47:29Z
+Stopped at: Completed 04-02-PLAN.md
+Resume file: .planning/phases/04-web-data-foundation/04-03-PLAN.md
