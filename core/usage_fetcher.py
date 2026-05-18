@@ -3,15 +3,20 @@
 Calls https://claude.ai/api/organizations/{org_id}/usage to get the live
 extra_usage.used_credits value (in cents). Returns dollars.
 
-Auth is resolved in priority order:
-  1. session_key / cf_clearance keys in ~/.claude-monitor/config.json
-  2. Chrome cookie store (auto-extracted, Windows only)
+Auth is resolved in priority order per D-06:
+  1. Windows Credential Manager (keyring) — always checked first
+  2. Firefox cookie store (browser-cookie3) — primary auto-extraction
+  3. Chrome cookie store (auto-extracted, Windows only, Chrome not running)
+  4. Manual paste prompt — handled in cli/main.py
 
 Config keys (in ~/.claude-monitor/config.json):
   org_id:        Anthropic organization UUID (required)
-  session_key:   sessionKey cookie from claude.ai (optional, overrides Chrome)
-  cf_clearance:  cf_clearance cookie from claude.ai (optional, overrides Chrome)
   auto_seed:     set false to disable auto-seeding at startup (default true)
+
+Credentials (D-03/D-04/D-05):
+  sessionKey and cf_clearance are stored exclusively in Windows Credential Manager
+  via keyring (service: claude-monitor). session_key/cf_clearance found in config.json
+  are auto-migrated to keyring on startup and deleted from the file.
 """
 import base64
 import json
@@ -20,12 +25,17 @@ import os
 import shutil
 import sqlite3
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Tuple
+
+import httpx
+import keyring
 
 logger = logging.getLogger(__name__)
 
 _USAGE_URL = "https://claude.ai/api/organizations/{org_id}/usage"
+_ACCOUNT_URL = "https://claude.ai/api/account"
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -237,37 +247,271 @@ def _read_chrome_cookies() -> Tuple[Optional[str], Optional[str]]:
 # Auth cookie resolution
 # ---------------------------------------------------------------------------
 
+def _read_firefox_cookies() -> Tuple[Optional[str], Optional[str]]:
+    """Extract sessionKey and cf_clearance from Firefox cookie store for claude.ai.
+
+    Uses browser-cookie3 for profile discovery and cookie extraction.
+    Firefox stores cookies in cleartext (unlike Chrome) — no decryption needed.
+    Returns (session_key, cf_clearance). Either may be None if not found.
+
+    Silently returns (None, None) on any failure, including Firefox WAL lock.
+    """
+    try:
+        import browser_cookie3
+        cj = browser_cookie3.firefox(domain_name=".claude.ai")
+        session_key: Optional[str] = None
+        cf_clearance: Optional[str] = None
+        for cookie in cj:
+            if cookie.name == "sessionKey" and session_key is None:
+                session_key = cookie.value
+            elif cookie.name == "cf_clearance" and cf_clearance is None:
+                cf_clearance = cookie.value
+        if session_key:
+            logger.debug("firefox_cookies: extracted sessionKey, cf_clearance=%s", bool(cf_clearance))
+        else:
+            logger.debug("firefox_cookies: sessionKey not found in Firefox cookies")
+        return session_key, cf_clearance
+    except Exception as exc:
+        logger.debug("firefox_cookies: extraction failed: %s", exc)
+        return None, None
+
+
+def _migrate_config_to_keyring(config_dir: Path) -> None:
+    """One-time migration: move session_key and cf_clearance from config.json to keyring.
+
+    Reads config.json, copies any session_key / cf_clearance values to Windows
+    Credential Manager via keyring, removes them from config.json, and writes the
+    cleaned config back atomically using the .tmp -> .replace() pattern.
+
+    Safe to call on every startup: no-op if keys are not present or file missing.
+    Per D-04 — one-way migration, logged at INFO, no user prompt.
+    """
+    config_file = config_dir / "config.json"
+    if not config_file.exists():
+        return
+    try:
+        cfg = json.loads(config_file.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning("auth: failed to read config.json for migration: %s", exc)
+        return
+
+    changed = False
+    for config_key, keyring_username in [
+        ("session_key", "sessionKey"),
+        ("cf_clearance", "cf_clearance"),
+    ]:
+        value = cfg.get(config_key)
+        if value:
+            try:
+                keyring.set_password("claude-monitor", keyring_username, value)
+                del cfg[config_key]
+                logger.info("auth: migrated %s from config.json to keyring", config_key)
+                changed = True
+            except Exception as exc:
+                logger.warning("auth: failed to migrate %s to keyring: %s", config_key, exc)
+
+    if changed:
+        try:
+            tmp = config_file.with_suffix(".tmp")
+            tmp.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+            tmp.replace(config_file)
+        except Exception as exc:
+            logger.warning("auth: failed to write cleaned config.json: %s", exc)
+
+
 def _read_auth_cookies(config_dir: Path) -> Tuple[Optional[str], Optional[str]]:
-    """Resolve sessionKey and cf_clearance with config.json taking priority over Chrome.
+    """Resolve sessionKey and cf_clearance in priority order per D-06.
 
     Priority:
-      1. Explicit values in config.json (session_key / cf_clearance keys)
-      2. Chrome cookie store (auto-extracted)
+      1. Windows Credential Manager (keyring) — checked first on every call
+      2. Firefox cookie store (browser-cookie3) — primary auto-extraction
+      3. Chrome cookie store — existing implementation; Chrome 127+ may fail
+      4. Caller handles manual paste when this returns (None, None)
 
-    Returns (session_key, cf_clearance).
+    Returns (session_key, cf_clearance). Either or both may be None.
+    SECURITY: Never logs the actual key value — only logs source or failure.
     """
-    cfg: dict = {}
-    config_file = config_dir / "config.json"
+    # Priority 1: keyring (Windows Credential Manager)
     try:
-        cfg = json.loads(config_file.read_text(encoding="utf-8")) if config_file.exists() else {}
+        session_key = keyring.get_password("claude-monitor", "sessionKey") or None
+        cf_clearance = keyring.get_password("claude-monitor", "cf_clearance") or None
+        if session_key:
+            logger.debug("auth: sessionKey from keyring")
+            return session_key, cf_clearance
     except Exception as exc:
-        logger.warning("usage_fetcher: failed to read config.json: %s", exc)
+        logger.debug("auth: keyring read error: %s", exc)
 
-    session_key: Optional[str] = cfg.get("session_key") or None
-    cf_clearance: Optional[str] = cfg.get("cf_clearance") or None
+    # Priority 2: Firefox cookie store
+    session_key, cf_clearance = _read_firefox_cookies()
+    if session_key:
+        logger.debug("auth: sessionKey from Firefox")
+        return session_key, cf_clearance
 
-    if not session_key:
-        logger.debug("usage_fetcher: session_key not in config — trying Chrome cookies")
-        chrome_sk, chrome_cf = _read_chrome_cookies()
-        session_key = session_key or chrome_sk
-        cf_clearance = cf_clearance or chrome_cf
+    # Priority 3: Chrome cookie store (only when Chrome not running)
+    session_key, cf_clearance = _read_chrome_cookies()
+    if session_key:
+        logger.debug("auth: sessionKey from Chrome")
+        return session_key, cf_clearance
 
-    return session_key, cf_clearance
+    logger.warning("auth: no sessionKey found in keyring, Firefox, or Chrome")
+    return None, None
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+def _discover_org_id(session_key: str) -> Optional[str]:
+    """Auto-discover org_id using /api/account endpoint.
+
+    Calls GET https://claude.ai/api/account and returns the first
+    organization UUID from memberships. No org_id required to call this.
+    Returns None on any failure or empty memberships.
+
+    Per D-01: result should be written to config.json["org_id"] by the caller.
+    Per D-02: caller should skip this if org_id already in config.json.
+    """
+    try:
+        resp = httpx.get(
+            _ACCOUNT_URL,
+            headers={
+                "Cookie": f"sessionKey={session_key}",
+                "Accept": "application/json",
+                "User-Agent": _USER_AGENT,
+                "anthropic-client-platform": "web_claude_ai",
+            },
+            timeout=10,
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        logger.debug("_discover_org_id: raw response memberships count=%d", len(body.get("memberships", [])))
+        for m in body.get("memberships", []):
+            uuid = m.get("organization", {}).get("uuid")
+            if uuid:
+                logger.info("_discover_org_id: discovered org_id (omitted from log)")
+                return uuid
+        logger.warning("_discover_org_id: no organization UUID found in memberships")
+        return None
+    except Exception as exc:
+        logger.warning("_discover_org_id: request failed: %s", exc)
+        return None
+
+
+def _derive_billing_cycle_reset(config_dir: Path) -> datetime:
+    """Derive billing cycle reset datetime from config.json billing_cycle_start_day.
+
+    For Teams accounts, the /usage endpoint has no resets_at for extra_usage.
+    We derive the next billing cycle start from config.json.
+    Returns a timezone-aware UTC datetime.
+    """
+    config_file = config_dir / "config.json"
+    cycle_day = 1
+    try:
+        cfg = json.loads(config_file.read_text(encoding="utf-8")) if config_file.exists() else {}
+        raw_day = cfg.get("billing_cycle_start_day")
+        if isinstance(raw_day, int) and 1 <= raw_day <= 28:
+            cycle_day = raw_day
+    except Exception:
+        pass
+
+    today = datetime.now(timezone.utc).date()
+    try:
+        if today.day >= cycle_day:
+            # Next reset is next month
+            if today.month == 12:
+                reset_date = today.replace(year=today.year + 1, month=1, day=cycle_day)
+            else:
+                reset_date = today.replace(month=today.month + 1, day=cycle_day)
+        else:
+            reset_date = today.replace(day=cycle_day)
+    except ValueError:
+        reset_date = today.replace(day=1)
+
+    return datetime(reset_date.year, reset_date.month, reset_date.day, tzinfo=timezone.utc)
+
+
+def fetch_web_usage(org_id: str, config_dir: Path) -> Optional["WebUsageData"]:
+    """Fetch authoritative usage data from claude.ai API. Returns None on any failure.
+
+    Endpoint: GET https://claude.ai/api/organizations/{org_id}/usage
+    Auth: sessionKey cookie from _read_auth_cookies() — resolved per D-06 priority order.
+
+    Account type branching (CRITICAL — verified via live spike):
+      - five_hour is non-null: Max/Pro plan — use five_hour.utilization and resets_at
+      - extra_usage is non-null and is_enabled: Teams/Enterprise — use extra_usage.utilization;
+        reset_at derived from billing cycle config (no API-provided resets_at for Teams)
+      - Both null/disabled: returns None
+
+    SECURITY: never logs the sessionKey value at any log level.
+    Per D-22: uses .get() for all JSON field access; logs raw response at DEBUG.
+    """
+    from claude_monitor.core.models import WebUsageData
+    try:
+        session_key, cf_clearance = _read_auth_cookies(config_dir)
+        if not session_key:
+            logger.warning("fetch_web_usage: no sessionKey available")
+            return None
+
+        cookie_parts = [f"sessionKey={session_key}"]
+        if cf_clearance:
+            cookie_parts.append(f"cf_clearance={cf_clearance}")
+
+        resp = httpx.get(
+            _USAGE_URL.format(org_id=org_id),
+            headers={
+                "Cookie": "; ".join(cookie_parts),
+                "Accept": "application/json",
+                "User-Agent": _USER_AGENT,
+                "anthropic-client-platform": "web_claude_ai",
+            },
+            timeout=10,
+        )
+
+        if resp.status_code in (401, 403):
+            logger.warning(
+                "fetch_web_usage: auth rejected (%d) — sessionKey may be stale",
+                resp.status_code,
+            )
+            return None
+
+        resp.raise_for_status()
+        body = resp.json()
+        logger.debug("fetch_web_usage: raw response: %s", body)
+
+        five_hour = body.get("five_hour")
+        extra_usage = body.get("extra_usage")
+
+        if five_hour is not None:
+            # Max/Pro individual plan — 5-hour rolling window
+            # ASSUMED: five_hour.utilization scale is 0-100 (same as extra_usage; add comment)
+            utilization_pct = float(five_hour.get("utilization", 0.0))  # ASSUMED: 0-100 scale
+            reset_at_str = five_hour.get("resets_at")
+            if reset_at_str:
+                reset_at = datetime.fromisoformat(reset_at_str.replace("Z", "+00:00"))
+            else:
+                reset_at = _derive_billing_cycle_reset(config_dir)
+            plan_limit_tokens = None  # not in API
+        elif extra_usage and extra_usage.get("is_enabled"):
+            # Teams/Enterprise plan — monthly pool (extra_usage.utilization is % of monthly spend)
+            utilization_pct = float(extra_usage.get("utilization", 0.0))
+            # Teams has no resets_at — use billing cycle reset date from config
+            reset_at = _derive_billing_cycle_reset(config_dir)
+            plan_limit_tokens = None  # monthly_limit is in CENTS, not tokens
+        else:
+            logger.info("fetch_web_usage: no usable usage field in response (five_hour=null, extra_usage disabled or null)")
+            return None
+
+        return WebUsageData(
+            utilization_pct=utilization_pct,
+            reset_at=reset_at,
+            fetched_at=datetime.now(timezone.utc),
+            plan_limit_tokens=plan_limit_tokens,
+        )
+
+    except Exception as exc:
+        logger.warning("fetch_web_usage: request failed: %s", exc)
+        return None
+
 
 def fetch_pool_spend_usd(org_id: str, config_dir: Path) -> Optional[float]:
     """Return current extra_usage spend in USD, or None on failure."""
