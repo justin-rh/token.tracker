@@ -16,9 +16,9 @@ Key decisions implemented (from 03-CONTEXT.md):
 import json
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -37,29 +37,34 @@ class PoolState:
     is_overage: bool            # True when at least one OVERAGE session exists in period
 
 
-def _read_pool_config(config_dir: Path) -> Tuple[float, int, float, Optional[date]]:
+def _read_pool_config(config_dir: Path) -> Tuple[float, int, float, Optional[datetime], bool]:
     """Read pool config from config.json.
 
-    Returns (pool_size_usd, billing_cycle_start_day, pool_spend_seed_usd, pool_spend_seed_date).
+    Returns (pool_size_usd, billing_cycle_start_day, pool_spend_seed_usd, seed_cutoff, all_sessions).
 
-    pool_spend_seed_usd: dollar amount from Anthropic billing dashboard as of seed_date.
-    pool_spend_seed_date: date the seed was set — only log sessions AFTER this date are
-        added to the seed (sessions before are already covered by the seed value).
+    seed_cutoff: precise UTC datetime after which log sessions are counted on top of the
+        seed value. Prefers pool_spend_seed_datetime (UTC ISO string written by auto-seed);
+        falls back to pool_spend_seed_date (date-only, treated as midnight UTC).
+    all_sessions: if true, count every completed session toward pool spend without applying
+        a per-session token threshold.
 
     Validation rules:
       pool_size_usd: positive int or float → default 500.0
       billing_cycle_start_day: int 1–28 → default 1
       pool_spend_seed_usd: non-negative float → default 0.0
-      pool_spend_seed_date: ISO date string "YYYY-MM-DD" → default None
+      pool_spend_seed_datetime: UTC ISO datetime string → preferred cutoff
+      pool_spend_seed_date: ISO date string "YYYY-MM-DD" → fallback cutoff (midnight UTC)
+      all_sessions: bool → default False
     """
     pool_size = 500.0
     cycle_day = 1
     seed_usd = 0.0
-    seed_date: Optional[date] = None
+    seed_cutoff: Optional[datetime] = None
+    all_sessions = False
 
     config_file = config_dir / "config.json"
     if not config_file.exists():
-        return pool_size, cycle_day, seed_usd, seed_date
+        return pool_size, cycle_day, seed_usd, seed_cutoff, all_sessions
 
     try:
         with open(config_file, encoding="utf-8") as f:
@@ -92,20 +97,35 @@ def _read_pool_config(config_dir: Path) -> Tuple[float, int, float, Optional[dat
                 raw_seed,
             )
 
-        raw_seed_date = data.get("pool_spend_seed_date")
-        if isinstance(raw_seed_date, str):
+        # Prefer precise datetime; fall back to date (midnight UTC)
+        raw_dt = data.get("pool_spend_seed_datetime")
+        if isinstance(raw_dt, str):
             try:
-                seed_date = date.fromisoformat(raw_seed_date)
+                dt = datetime.fromisoformat(raw_dt)
+                seed_cutoff = dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
             except ValueError:
-                logger.warning(
-                    "config.json: pool_spend_seed_date=%r is not a valid ISO date (YYYY-MM-DD) — ignoring",
-                    raw_seed_date,
-                )
+                logger.warning("config.json: pool_spend_seed_datetime=%r invalid — trying date", raw_dt)
+
+        if seed_cutoff is None:
+            raw_seed_date = data.get("pool_spend_seed_date")
+            if isinstance(raw_seed_date, str):
+                try:
+                    d = date.fromisoformat(raw_seed_date)
+                    seed_cutoff = datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
+                except ValueError:
+                    logger.warning(
+                        "config.json: pool_spend_seed_date=%r is not a valid ISO date — ignoring",
+                        raw_seed_date,
+                    )
+
+        raw_all = data.get("all_sessions")
+        if isinstance(raw_all, bool):
+            all_sessions = raw_all
 
     except Exception as exc:
         logger.warning("Failed to read config.json for pool settings: %s", exc)
 
-    return pool_size, cycle_day, seed_usd, seed_date
+    return pool_size, cycle_day, seed_usd, seed_cutoff, all_sessions
 
 
 def _derive_billing_cycle_start(cycle_day: int) -> date:
@@ -132,15 +152,19 @@ def _derive_billing_cycle_start(cycle_day: int) -> date:
         return today.replace(day=1)
 
 
-def _in_billing_period(start_time_str: str, cycle_start: date) -> bool:
-    """Return True if block's startTime falls within the current billing period.
+def _in_billing_period(start_time_str: str, cutoff: Union[date, datetime]) -> bool:
+    """Return True if block's startTime is at or after cutoff.
 
-    start_time_str is a naive ISO string (e.g. "2026-05-08T11:03:17.797008").
-    Uses datetime.fromisoformat() — safe for Python 3.12 naive ISO strings.
+    cutoff may be a date (day-granular) or a UTC-aware datetime (precise).
+    Block startTimes may be naive or timezone-aware ISO strings.
     """
     try:
-        block_date = datetime.fromisoformat(start_time_str).date()
-        return block_date >= cycle_start
+        block_dt = datetime.fromisoformat(start_time_str)
+        if isinstance(cutoff, datetime):
+            if block_dt.tzinfo is None:
+                block_dt = block_dt.replace(tzinfo=timezone.utc)
+            return block_dt >= cutoff
+        return block_dt.date() >= cutoff
     except (ValueError, TypeError):
         return False
 
@@ -219,7 +243,7 @@ def compute_pool_state(
         config_dir = _DEFAULT_CONFIG_DIR
 
     # Read pool configuration from config.json (D-07/D-08)
-    pool_size_usd, cycle_day, seed_usd, seed_date = _read_pool_config(config_dir)
+    pool_size_usd, cycle_day, seed_usd, seed_cutoff, all_sessions = _read_pool_config(config_dir)
 
     # Determine billing cycle start — check cache first (D-06, Pitfall 4)
     current_cycle_start = _derive_billing_cycle_start(cycle_day)
@@ -246,11 +270,11 @@ def compute_pool_state(
     if threshold_state is not None:
         threshold_tokens = threshold_state.threshold_tokens
 
-    # When a seed is set, only count log sessions after seed_date — sessions before
+    # When a seed is set, only count log sessions after seed_cutoff — sessions before
     # are already captured by pool_spend_seed_usd from the Anthropic billing dashboard.
-    log_cutoff: date = cycle_start
-    if seed_date is not None and seed_date > cycle_start:
-        log_cutoff = seed_date
+    log_cutoff: Union[date, datetime] = cycle_start
+    if seed_cutoff is not None and seed_cutoff.date() > cycle_start:
+        log_cutoff = seed_cutoff
 
     # Sum OVERAGE session costs since log_cutoff (D-01, D-02, D-03)
     pool_spend_usd = seed_usd
@@ -261,8 +285,8 @@ def compute_pool_state(
         # Skip sessions before the log cutoff (billing period start or seed date)
         if not _in_billing_period(block.get("startTime", ""), log_cutoff):
             continue
-        # OVERAGE classification: totalTokens > threshold_tokens
-        if _classify_overage(block, threshold_tokens):
+        # OVERAGE classification: all sessions (Teams/Enterprise) or threshold-based (Max plan)
+        if all_sessions or _classify_overage(block, threshold_tokens):
             pool_spend_usd += block.get("costUSD", 0.0)
 
     # Derived metrics

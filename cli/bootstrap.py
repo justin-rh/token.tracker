@@ -78,3 +78,15 @@ def ensure_directories() -> None:
 
     for directory in dirs:
         directory.mkdir(parents=True, exist_ok=True)
+
+
+def auto_seed_pool_spend() -> None:
+    """Fetch live pool spend from Anthropic and update config seed at startup."""
+    try:
+        from claude_monitor.core.usage_fetcher import auto_seed_from_anthropic
+        config_dir = Path.home() / ".claude-monitor"
+        spend = auto_seed_from_anthropic(config_dir)
+        if spend is not None:
+            logging.getLogger(__name__).info("Auto-seeded pool spend: $%.2f", spend)
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Auto-seed failed (non-fatal): %s", exc)

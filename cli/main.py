@@ -14,6 +14,7 @@ from rich.console import Console
 
 from claude_monitor import __version__
 from claude_monitor.cli.bootstrap import (
+    auto_seed_pool_spend,
     ensure_directories,
     init_timezone,
     setup_environment,
@@ -83,6 +84,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         setup_environment()
         ensure_directories()
+        auto_seed_pool_spend()
 
         if settings.log_file:
             setup_logging(settings.log_level, settings.log_file, disable_console=True)

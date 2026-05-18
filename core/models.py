@@ -29,6 +29,7 @@ class UsageEntry:
     model: str = ""
     message_id: str = ""
     request_id: str = ""
+    session_id: str = ""
 
 
 @dataclass
@@ -83,6 +84,7 @@ class SessionBlock:
     actual_end_time: Optional[datetime] = None
     per_model_stats: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     models: List[str] = field(default_factory=list)
+    session_ids: List[str] = field(default_factory=list)
     sent_messages_count: int = 0
     cost_usd: float = 0.0
     limit_messages: List[Dict[str, Any]] = field(default_factory=list)

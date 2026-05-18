@@ -29,7 +29,7 @@ class MonitoringOrchestrator:
         """
         self.update_interval: int = update_interval
 
-        self.data_manager: DataManager = DataManager(cache_ttl=5, data_path=data_path)
+        self.data_manager: DataManager = DataManager(cache_ttl=5, hours_back=720, data_path=data_path)
         self.session_monitor: SessionMonitor = SessionMonitor()
 
         self._monitoring: bool = False

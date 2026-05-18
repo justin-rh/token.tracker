@@ -20,32 +20,31 @@ from core.statusline_cost import read_statusline_costs
 logger = logging.getLogger(__name__)
 
 
-def _resolve_block_cost(block: SessionBlock, statusline_costs: dict) -> float:
+def _resolve_block_cost(
+    block: SessionBlock, statusline_costs: dict, claimed: Optional[set] = None
+) -> float:
     """
     Resolve cost for a SessionBlock.
-    Primary: statusline.jsonl cost.total_cost_usd (per D-06)
-    Fallback: sum of pricing-engine costs from the block's usage entries (per D-06 fallback)
+    Primary: sum statusline.jsonl costs for each session_id in the block (per D-06).
+    Fallback: pricing-engine cost_usd accumulated in the block (per D-06 fallback).
 
-    SessionBlock does not carry a session_id field (blocks are time-window aggregates,
-    not 1:1 with Claude Code sessions). When statusline entries are keyed by session_id,
-    this lookup will always fall through to the pricing-engine fallback. If future work
-    adds session_id to SessionBlock (e.g., from JSONL sessionId field), the primary path
-    will start matching automatically. (See D-07: adapt if structure differs.)
+    claimed: set of session_ids already attributed to a prior block. Sessions in this
+    set are skipped to prevent double-counting when a session spans two block windows.
     """
-    # Try session_id match first
-    if hasattr(block, 'session_id') and block.session_id:
-        cost = statusline_costs.get(str(block.session_id))
-        if cost is not None:
-            return cost
-
-    # Try timestamp-based match: find statusline entry whose timestamp key
-    # matches the block's start_time ISO string (best-effort approximation).
-    start_key = block.start_time.isoformat() if block.start_time else None
-    if start_key and start_key in statusline_costs:
-        return statusline_costs[start_key]
+    if block.session_ids:
+        total = 0.0
+        matched = False
+        for sid in block.session_ids:
+            if claimed and sid in claimed:
+                continue
+            cost = statusline_costs.get(sid)
+            if cost is not None:
+                total += cost
+                matched = True
+        if matched:
+            return total
 
     # Fallback: return the pricing-engine computed cost_usd accumulated in the block.
-    # This preserves the reference tool's behavior when statusline has no matching entry.
     return block.cost_usd
 
 
@@ -79,7 +78,8 @@ class SessionAnalyzer:
         # cumulative cost per session — more accurate than raw token math.
         # Falls back to pricing-engine cost when statusline has no matching entry.
         # costUSD field in session JSONL is NOT used (removed in v1.0.9, per D-08).
-        statusline_costs = read_statusline_costs()  # dict: session_id/timestamp -> cost_usd
+        statusline_costs = read_statusline_costs()  # dict: session_id -> cost_usd
+        claimed: set = set()  # session_ids already attributed to a finalized block
 
         blocks = []
         current_block = None
@@ -93,7 +93,8 @@ class SessionAnalyzer:
                 if current_block:
                     self._finalize_block(current_block)
                     # Apply statusline cost as primary source (D-06)
-                    current_block.cost_usd = _resolve_block_cost(current_block, statusline_costs)
+                    current_block.cost_usd = _resolve_block_cost(current_block, statusline_costs, claimed)
+                    claimed.update(current_block.session_ids)
                     blocks.append(current_block)
 
                     # Check for gap
@@ -111,7 +112,7 @@ class SessionAnalyzer:
         if current_block:
             self._finalize_block(current_block)
             # Apply statusline cost as primary source (D-06)
-            current_block.cost_usd = _resolve_block_cost(current_block, statusline_costs)
+            current_block.cost_usd = _resolve_block_cost(current_block, statusline_costs, claimed)
             blocks.append(current_block)
 
         # Mark active blocks
@@ -208,6 +209,10 @@ class SessionAnalyzer:
         # Model tracking (prevent duplicates)
         if model and model not in block.models:
             block.models.append(model)
+
+        # Session ID tracking (for statusline cost lookup)
+        if entry.session_id and entry.session_id not in block.session_ids:
+            block.session_ids.append(entry.session_id)
 
         # Increment sent messages count
         block.sent_messages_count += 1

@@ -363,6 +363,7 @@ def _map_to_usage_entry(
         message = data.get("message", {})
         message_id = data.get("message_id") or message.get("id") or ""
         request_id = data.get("request_id") or data.get("requestId") or "unknown"
+        session_id = data.get("sessionId") or data.get("session_id") or ""
 
         return UsageEntry(
             timestamp=timestamp,
@@ -374,6 +375,7 @@ def _map_to_usage_entry(
             model=model,
             message_id=message_id,
             request_id=request_id,
+            session_id=session_id,
         )
 
     except (KeyError, ValueError, TypeError, AttributeError) as e:
