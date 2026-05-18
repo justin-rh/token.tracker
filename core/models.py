@@ -111,6 +111,26 @@ class SessionBlock:
         return max(duration, 1.0)
 
 
+@dataclass(frozen=True)
+class WebUsageData:
+    """Authoritative usage data fetched from claude.ai API.
+
+    Fields:
+        utilization_pct: 0.0-100.0 scale. Source depends on account type:
+            - Max/Pro (five_hour field): 5-hour window utilization %
+            - Teams/Enterprise (extra_usage field): monthly pool utilization %
+        reset_at: UTC datetime when this window/period resets. For Teams accounts
+            (no five_hour window), derived from billing cycle config.
+        fetched_at: UTC datetime when this data was retrieved.
+        plan_limit_tokens: None for Teams accounts (monthly_limit is in CENTS, not tokens).
+    """
+
+    utilization_pct: float           # 0.0-100.0; from five_hour.utilization or extra_usage.utilization
+    reset_at: datetime               # when this window/period resets (UTC)
+    fetched_at: datetime             # when this data was retrieved (UTC)
+    plan_limit_tokens: Optional[int]  # None for Teams (monthly_limit is cents, not tokens)
+
+
 def normalize_model_name(model: str) -> str:
     """Normalize model name for consistent usage across the application.
 
