@@ -64,16 +64,23 @@ def _read_cycle_day(config_dir: Path) -> int:
     return cycle_day
 
 
-def _derive_billing_cycle_start(cycle_day: int) -> date:
+def _derive_billing_cycle_start(cycle_day: int, today: date | None = None) -> date:
     """Derive the most recent billing cycle start date from today and cycle_day.
 
     If today.day >= cycle_day → this month's cycle_day.
     Otherwise → previous month's cycle_day.
     Wraps in try/except for invalid day values.
 
+    Args:
+        cycle_day: Day of month when billing cycle starts (1-28).
+        today: Reference date to use. Defaults to date.today() (local). Callers
+               should pass datetime.now(timezone.utc).date() to stay consistent
+               with UTC-based today_date comparisons.
+
     Exact replica of core/pool_state_manager.py._derive_billing_cycle_start().
     """
-    today = date.today()
+    if today is None:
+        today = date.today()
     try:
         if today.day >= cycle_day:
             return today.replace(day=cycle_day)
@@ -131,15 +138,24 @@ def compute_project_breakdown(
         config_dir = _DEFAULT_CONFIG_DIR
 
     cycle_day = _read_cycle_day(config_dir)
-    billing_start: date = _derive_billing_cycle_start(cycle_day)
     today_date: date = datetime.now(timezone.utc).date()
+    billing_start: date = _derive_billing_cycle_start(cycle_day, today=today_date)
 
     today_tokens: dict[str, int] = defaultdict(int)
     month_tokens: dict[str, int] = defaultdict(int)
 
     for file_path in _find_jsonl_files(data_path):
         slug = file_path.parent.name
+        # D-01: display name is the last hyphen-separated segment of the slug.
+        # Known limitation: two project directories that share the same last segment
+        # (e.g. two clones of "tracker") will have their token counts merged silently.
         display_name = slug.split("-")[-1]
+        if display_name in today_tokens or display_name in month_tokens:
+            logger.debug(
+                "project_breakdown: display_name collision for '%s' (slug=%s) — "
+                "tokens merged into existing key",
+                display_name, slug,
+            )
 
         raw_parsed: list = []
         try:
