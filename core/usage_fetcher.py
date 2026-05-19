@@ -518,8 +518,6 @@ def fetch_web_usage(org_id: str, config_dir: Path) -> Optional["WebUsageData"]:
 def fetch_pool_spend_usd(org_id: str, config_dir: Path) -> Optional[float]:
     """Return current extra_usage spend in USD, or None on failure."""
     try:
-        import urllib.request
-
         session_key, cf_clearance = _read_auth_cookies(config_dir)
         if not session_key:
             logger.warning("usage_fetcher: no sessionKey available (config or Chrome)")
@@ -530,7 +528,7 @@ def fetch_pool_spend_usd(org_id: str, config_dir: Path) -> Optional[float]:
             cookie_parts.append(f"cf_clearance={cf_clearance}")
 
         url = _USAGE_URL.format(org_id=org_id)
-        req = urllib.request.Request(
+        resp = httpx.get(
             url,
             headers={
                 "Cookie": "; ".join(cookie_parts),
@@ -538,9 +536,11 @@ def fetch_pool_spend_usd(org_id: str, config_dir: Path) -> Optional[float]:
                 "User-Agent": _USER_AGENT,
                 "anthropic-client-platform": "web_claude_ai",
             },
+            timeout=10,
+            verify=False,
         )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
+        resp.raise_for_status()
+        body = resp.json()
 
         extra = body.get("extra_usage")
         if not extra or not extra.get("is_enabled"):
