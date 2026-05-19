@@ -16,7 +16,6 @@ Key decisions implemented (from 06-02-PLAN.md):
 
 import json
 import logging
-import os
 from collections import defaultdict
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -27,7 +26,7 @@ from claude_monitor.data.reader import _deduplicate_entries, _find_jsonl_files
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_DATA_PATH = Path(os.environ["APPDATA"]) / ".claude" / "projects"
+_DEFAULT_DATA_PATH = Path.home() / ".claude" / "projects"
 _DEFAULT_CONFIG_DIR = Path.home() / ".claude-monitor"
 
 
@@ -119,7 +118,7 @@ def compute_project_breakdown(
 
     Args:
         data_path: Root of the project JSONL directories. Defaults to
-                   %APPDATA%\\.claude\\projects.
+                   ~/.claude/projects (Path.home() / ".claude" / "projects").
         config_dir: Directory containing config.json. Defaults to
                     ~/.claude-monitor.
 
