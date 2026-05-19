@@ -5,6 +5,7 @@ Handles formatting of active session screens and session data display.
 
 from dataclasses import dataclass
 from datetime import datetime
+from datetime import timezone as dt_timezone
 from typing import Any, Optional
 
 import pytz
@@ -267,8 +268,10 @@ class SessionDisplayComponent:
             )
 
             # Phase 2: Threshold Detection rows (D-05, D-06, D-07, D-08, D-09)
+            # Phase 4: Suppress threshold rows when web_usage is available (D-17, Pitfall 7)
             threshold_state = kwargs.get("threshold_state")
-            if threshold_state is not None:
+            _show_threshold_rows = threshold_state is not None and kwargs.get("web_usage") is None
+            if _show_threshold_rows:
                 screen_buffer.append(f"[separator]{'─' * 60}[/]")
 
                 if threshold_state.status == "calibrating":
@@ -280,9 +283,15 @@ class SessionDisplayComponent:
                     # D-06: INCLUDED/OVERAGE row suppressed entirely during calibration
                 elif threshold_state.status == "auto":
                     # D-07: show P90-inferred value
+                    # D-18: append web-unavailable suffix when web data is absent
+                    web_unavailable_suffix = (
+                        "" if kwargs.get("web_usage") is not None
+                        else " (est. — web unavailable)"
+                    )
                     screen_buffer.append(
                         f"🎯 [value]Token limit:[/]          "
-                        f"[info]{threshold_state.threshold_tokens:,} tokens[/] [dim](P90)[/]"
+                        f"[info]{threshold_state.threshold_tokens:,} tokens[/]"
+                        f" [dim](P90){web_unavailable_suffix}[/]"
                     )
                     # D-09: status row present when threshold is known
                     tokens_used_val = kwargs.get("tokens_used", tokens_used)
@@ -296,9 +305,15 @@ class SessionDisplayComponent:
                         )
                 else:  # manual
                     # D-08: show manually-configured value
+                    # D-18: suffix also shown for manual threshold when web data is absent
+                    web_unavailable_suffix = (
+                        "" if kwargs.get("web_usage") is not None
+                        else " (est. — web unavailable)"
+                    )
                     screen_buffer.append(
                         f"🎯 [value]Token limit:[/]          "
-                        f"[info]{threshold_state.threshold_tokens:,} tokens[/] [dim](manual)[/]"
+                        f"[info]{threshold_state.threshold_tokens:,} tokens[/]"
+                        f" [dim](manual){web_unavailable_suffix}[/]"
                     )
                     # D-09: status row present when threshold is known
                     tokens_used_val = kwargs.get("tokens_used", tokens_used)
@@ -351,6 +366,34 @@ class SessionDisplayComponent:
                         exhaust_str = "—"
                     screen_buffer.append(
                         f"🔥 [value]Pool burn:[/]    est. ${burn_rate_per_hr:.2f}/hr — {exhaust_str}"
+                    )
+
+            # Phase 4: Web usage rows (D-17, D-18, D-19 from 04-CONTEXT.md)
+            web_usage = kwargs.get("web_usage")
+            if web_usage is not None:
+                screen_buffer.append(f"[separator]{'─' * 60}[/]")
+
+                # D-17: Utilization row with progress bar (reuses _render_wide_progress_bar)
+                util_bar = self._render_wide_progress_bar(web_usage.utilization_pct)
+                screen_buffer.append(
+                    f"🌐 [value]Utilization:[/]   {util_bar} {web_usage.utilization_pct:.1f}%  [dim]via claude.ai[/]"
+                )
+
+                # D-17: Resets In row — countdown to reset_at (UTC)
+                now_utc = datetime.now(dt_timezone.utc)
+                delta = web_usage.reset_at - now_utc
+                total_secs = max(0, int(delta.total_seconds()))
+                hours, rem = divmod(total_secs, 3600)
+                mins = rem // 60
+                screen_buffer.append(
+                    f"⏱  [value]Resets in:[/]     {hours}h {mins}m"
+                )
+
+                # D-19: Last web sync footer (shown after first successful fetch)
+                last_sync = kwargs.get("last_web_sync")
+                if last_sync:
+                    screen_buffer.append(
+                        f"🔄 [dim]Last web sync: {last_sync.strftime('%H:%M:%S')}[/]"
                     )
         else:
             cost_display = CostIndicator.render(session_cost)
