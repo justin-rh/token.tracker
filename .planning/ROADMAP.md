@@ -105,8 +105,11 @@ Plans:
   3. Right-clicking the tray icon shows a menu with "Open Dashboard" and "Quit"; selecting Quit shuts down the app identically to Ctrl+C — no hung process, no ghost icon
   4. Left-clicking the tray icon toggles the terminal window between visible and minimized without launching a second instance
   5. After the app exits (any path), the tray icon is gone from the notification area — no ghost icons require a hover to clear
-**Plans**: TBD
-**UI hint**: yes
+**Plans**: 2 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — Add pystray + Pillow dependencies; create ui/tray_manager.py (TrayManager class, color-coded Pillow icon, ctypes window toggle, CTRL_C_EVENT quit)
+- [ ] 05-02-PLAN.md — Wire TrayManager into cli/main.py (import, init, start, update in callback, stop in finally); smoke-test checkpoint
 
 ### Phase 6: Per-Project Breakdown
 **Goal**: Users can see which Claude Code project folders consumed the most tokens today and this billing month, giving context for where usage is coming from
@@ -129,5 +132,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Threshold Detection | 3/3 | Complete | 2026-05-08 |
 | 3. Overage Pool Dashboard | 3/3 | Complete | 2026-05-08 |
 | 4. Web Data Foundation | 6/6 | Complete | 2026-05-19 |
-| 5. System Tray | 0/TBD | Not started | - |
+| 5. System Tray | 0/2 | Not started | - |
 | 6. Per-Project Breakdown | 0/TBD | Not started | - |
