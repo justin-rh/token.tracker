@@ -102,5 +102,5 @@ v2.0: [==============================] 89% (8/8 plans complete, 2/3 phases compl
 ## Session Continuity
 
 Last session: 2026-05-19T00:00:00Z
-Stopped at: Completed 05-02-PLAN.md — Phase 5 complete (2/2 plans, all TRAY requirements satisfied)
-Resume file: .planning/phases/06-per-project/ (not yet created — run /gsd-plan-phase 6)
+Stopped at: Phase 6 context gathered — ready to plan
+Resume file: .planning/phases/06-per-project-breakdown/06-CONTEXT.md
