@@ -265,6 +265,14 @@ def compute_pool_state(
 
     billing_cycle_start_str = cycle_start.isoformat()
 
+    # D-24 (04-CONTEXT.md): Log billing cycle reset event when cycle_start changes.
+    # Detects transition: cached billing_cycle_start != current cycle_start → reset occurred.
+    cached_cycle_str = cached.get("billing_cycle_start")
+    if cached_cycle_str and cached_cycle_str != billing_cycle_start_str:
+        logger.info(
+            "Billing cycle reset — pool spend cleared to $0.00"
+        )
+
     # Get threshold_tokens — None when calibrating (Pitfall 3)
     threshold_tokens: Optional[int] = None
     if threshold_state is not None:
