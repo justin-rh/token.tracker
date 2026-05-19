@@ -393,7 +393,7 @@ class SessionDisplayComponent:
                 last_sync = kwargs.get("last_web_sync")
                 if last_sync:
                     screen_buffer.append(
-                        f"🔄 [dim]Last web sync: {last_sync.strftime('%H:%M:%S')}[/]"
+                        f"🔄 [dim]Last web sync: {last_sync.astimezone().strftime('%H:%M:%S')}[/]"
                     )
         else:
             cost_display = CostIndicator.render(session_cost)
