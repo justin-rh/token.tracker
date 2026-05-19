@@ -228,9 +228,10 @@ def _run_monitoring(args: argparse.Namespace) -> None:
                         args,
                         monitoring_data.get("token_limit", token_limit),
                         threshold_state=monitoring_data.get("threshold_state"),
-                        pool_state=monitoring_data.get("pool_state"),          # Phase 3 NEW
-                        web_usage=monitoring_data.get("web_usage"),            # Phase 4 NEW
-                        last_web_sync=monitoring_data.get("last_web_sync"),    # Phase 4 NEW
+                        pool_state=monitoring_data.get("pool_state"),                    # Phase 3 NEW
+                        web_usage=monitoring_data.get("web_usage"),                      # Phase 4 NEW
+                        last_web_sync=monitoring_data.get("last_web_sync"),              # Phase 4 NEW
+                        project_breakdown=monitoring_data.get("project_breakdown"),      # Phase 6 NEW
                     )
 
                     if live_display:
