@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from core.project_breakdown import compute_project_breakdown
+from core.project_breakdown import compute_project_breakdown, _derive_billing_cycle_start
 from claude_monitor.core.models import ProjectBreakdown
 
 
@@ -160,9 +160,17 @@ def test_billing_month_window_filtering(tmp_path):
     proj = tmp_path / "proj-delta"
     proj.mkdir()
 
-    # Entry within billing month: 5 days ago is definitely within the current billing period
-    # when start_day=1 (since we're 5 days into the month at minimum if today >= 5)
-    in_billing = _days_ago_str(5)
+    # Derive billing_start the same way compute_project_breakdown does (UTC date),
+    # then construct a timestamp anchored to billing_start itself.  This avoids the
+    # fragile _days_ago_str(5) assumption which fails on days 1-5 of the month when
+    # the billing period just rolled over and "5 days ago" falls in the previous cycle.
+    today_utc = datetime.now(timezone.utc).date()
+    billing_start = _derive_billing_cycle_start(1, today=today_utc)
+    in_billing_ts = datetime(
+        billing_start.year, billing_start.month, billing_start.day,
+        12, 0, 0, tzinfo=timezone.utc,
+    )
+    in_billing = in_billing_ts.isoformat()
     # Entry 40 days ago is before most billing periods (1+ months ago)
     before_billing = _days_ago_str(40)
 
