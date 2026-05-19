@@ -43,9 +43,13 @@ Know instantly whether you're on included tokens or burning the $500 overage poo
 - [x] Tray tooltip shows utilization % and last sync time; right-click menu has Open Dashboard + Quit — Phase 5 complete (2026-05-19)
 - [x] Quit from tray menu exits cleanly (no ghost icon, no hung process) — Phase 5 complete (2026-05-19)
 
+### Validated (continued)
+
+- [x] Per-project token breakdown in terminal dashboard — Today (est.) and This month (est.) side-by-side columns — Phase 6 complete (2026-05-19)
+
 ### Active
 
-- [ ] Detects whether the session reset model is rolling 5-hour windows or calendar-day
+- (none — v2.0 milestone complete)
 
 ### Out of Scope
 
@@ -99,4 +103,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-08 after Phase 3 completion — milestone v1.0 complete*
+*Last updated: 2026-05-19 after Phase 6 completion — milestone v2.0 complete*
