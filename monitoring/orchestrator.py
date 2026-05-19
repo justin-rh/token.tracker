@@ -209,6 +209,7 @@ class MonitoringOrchestrator:
                 "threshold_state": threshold_state,   # ThresholdState | None — new in Phase 2
                 "pool_state": pool_state,              # Phase 3 NEW
                 "web_usage": self._web_poller.get_web_usage() if self._web_poller else None,  # Phase 4 NEW
+                "last_web_sync": self._web_poller.get_last_sync_time() if self._web_poller else None,  # Phase 4 NEW
                 "args": self._args,
                 "session_id": self.session_monitor.current_session_id,
                 "session_count": self.session_monitor.session_count,

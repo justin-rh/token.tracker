@@ -2,6 +2,7 @@
 
 import argparse
 import contextlib
+import json
 import logging
 import signal
 import sys
@@ -26,6 +27,12 @@ from claude_monitor.data.aggregator import UsageAggregator
 from claude_monitor.data.analysis import analyze_usage
 from claude_monitor.error_handling import report_error
 from claude_monitor.monitoring.orchestrator import MonitoringOrchestrator
+from claude_monitor.monitoring.web_poller import WebPoller
+from claude_monitor.core.usage_fetcher import (
+    _migrate_config_to_keyring,
+    _read_auth_cookies,
+    _discover_org_id,
+)
 from claude_monitor.terminal.manager import (
     enter_alternate_screen,
     handle_cleanup_and_exit,
@@ -157,6 +164,10 @@ def _run_monitoring(args: argparse.Namespace) -> None:
 
         enter_alternate_screen()
 
+        # Phase 4: Auth setup MUST complete before Rich Live context opens (Pitfall 5)
+        config_dir = Path.home() / ".claude-monitor"
+        session_key, org_id = _setup_auth(config_dir)
+
         live_display_active = False
 
         try:
@@ -172,6 +183,13 @@ def _run_monitoring(args: argparse.Namespace) -> None:
                 data_path=str(data_path),
             )
             orchestrator.set_args(args)
+
+            # Phase 4: Start WebPoller daemon thread (D-12, D-14)
+            web_poller = None
+            if org_id:
+                web_poller = WebPoller(org_id, config_dir)
+                web_poller.start()
+                orchestrator.set_web_poller(web_poller)
 
             # Setup monitoring callback
             def on_data_update(monitoring_data: Dict[str, Any]) -> None:
@@ -196,6 +214,8 @@ def _run_monitoring(args: argparse.Namespace) -> None:
                         monitoring_data.get("token_limit", token_limit),
                         threshold_state=monitoring_data.get("threshold_state"),
                         pool_state=monitoring_data.get("pool_state"),          # Phase 3 NEW
+                        web_usage=monitoring_data.get("web_usage"),            # Phase 4 NEW
+                        last_web_sync=monitoring_data.get("last_web_sync"),    # Phase 4 NEW
                     )
 
                     if live_display:
@@ -244,6 +264,10 @@ def _run_monitoring(args: argparse.Namespace) -> None:
             # Stop monitoring first
             if "orchestrator" in locals():
                 orchestrator.stop()
+
+            # Phase 4: Stop WebPoller daemon thread (signals Event; thread exits on next wake)
+            if "web_poller" in locals() and web_poller is not None:
+                web_poller.stop()
 
             # Exit live display context if it was activated
             if live_display_active:
@@ -316,6 +340,125 @@ def _get_initial_token_limit(
 
     # For standard plans, just get the limit
     return get_token_limit(plan)
+
+
+def _setup_auth(config_dir: Path) -> tuple:
+    """Resolve authentication before the Rich Live display starts.
+
+    MUST be called BEFORE live_display.__enter__() — console input() is
+    incompatible with the Rich Live rendering context (Pitfall 5 in RESEARCH.md).
+
+    Implements D-04 (migration), D-06 (priority order), D-08 (manual paste prompt),
+    D-09 (org_id discovery), D-10 (stale key clear + re-prompt), D-11 (keyring read).
+
+    Returns (session_key, org_id). Either may be None if setup failed.
+    """
+    import keyring
+
+    _migrate_config_to_keyring(config_dir)  # D-04: one-time migration
+
+    # Read config.json for org_id
+    config_file = config_dir / "config.json"
+    try:
+        cfg = json.loads(config_file.read_text(encoding="utf-8")) if config_file.exists() else {}
+    except Exception:
+        cfg = {}
+
+    while True:
+        session_key, _cf = _read_auth_cookies(config_dir)  # D-06 priority order
+
+        if session_key:
+            # D-10: Stale key check — verify the key works before launching dashboard.
+            # _discover_org_id() makes a real API call; None means 401/403 (stale key)
+            # or genuine network failure. We treat None as "key may be stale" and
+            # only clear+re-prompt when org_id is also unknown (key is our only auth signal).
+            org_id = cfg.get("org_id")
+            if not org_id:
+                discovered = _discover_org_id(session_key)
+                if discovered:
+                    org_id = discovered
+                    cfg["org_id"] = org_id
+                    try:
+                        config_dir.mkdir(parents=True, exist_ok=True)
+                        tmp = config_file.with_suffix(".tmp")
+                        tmp.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+                        tmp.replace(config_file)
+                    except Exception as exc:
+                        logging.getLogger(__name__).warning(
+                            "auth: failed to write org_id to config.json: %s", exc
+                        )
+                else:
+                    # D-10: _discover_org_id() returned None — sessionKey may be stale.
+                    # Clear from keyring and fall through to D-08 paste prompt.
+                    try:
+                        keyring.delete_password("claude-monitor", "sessionKey")
+                    except keyring.errors.PasswordDeleteError:
+                        pass
+                    logging.getLogger(__name__).info(
+                        "auth: stale sessionKey cleared — re-prompting"
+                    )
+                    session_key = None
+                    # Fall through to D-08 prompt below
+            if session_key:
+                return session_key, org_id
+
+        # D-08: No sessionKey available (or stale key cleared above).
+        # Block dashboard launch and prompt for manual paste.
+        print("\nWeb auth required.")
+        print("1. Open claude.ai in your browser")
+        print("2. Open DevTools (F12) → Application → Cookies → claude.ai")
+        print("3. Copy the value of the 'sessionKey' cookie")
+        print()
+        try:
+            pasted = input("Paste sessionKey here: ").strip() or None
+        except (EOFError, KeyboardInterrupt):
+            return None, cfg.get("org_id")
+        if pasted:
+            try:
+                keyring.set_password("claude-monitor", "sessionKey", pasted)
+            except Exception as exc:
+                logging.getLogger(__name__).warning(
+                    "auth: failed to store sessionKey in keyring: %s", exc
+                )
+            session_key = pasted
+            # D-09: Attempt org_id discovery with the newly pasted key
+            org_id = cfg.get("org_id")
+            if not org_id:
+                discovered = _discover_org_id(session_key)
+                if discovered:
+                    org_id = discovered
+                    cfg["org_id"] = org_id
+                    try:
+                        config_dir.mkdir(parents=True, exist_ok=True)
+                        tmp = config_file.with_suffix(".tmp")
+                        tmp.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+                        tmp.replace(config_file)
+                    except Exception as exc:
+                        logging.getLogger(__name__).warning(
+                            "auth: failed to write org_id to config.json: %s", exc
+                        )
+                else:
+                    # D-09: Auto-discovery failed — prompt user for org_id
+                    print("\nOrg ID required (auto-discovery failed).")
+                    print("Find it in: claude.ai → Settings → Account → Organization ID")
+                    print()
+                    try:
+                        org_id = input("Paste org_id here: ").strip() or None
+                    except (EOFError, KeyboardInterrupt):
+                        org_id = None
+                    if org_id:
+                        cfg["org_id"] = org_id
+                        try:
+                            config_dir.mkdir(parents=True, exist_ok=True)
+                            tmp = config_file.with_suffix(".tmp")
+                            tmp.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+                            tmp.replace(config_file)
+                        except Exception as exc:
+                            logging.getLogger(__name__).warning(
+                                "auth: failed to write org_id to config.json: %s", exc
+                            )
+            return session_key, org_id
+        # If user pressed Enter with no input, loop and try again
 
 
 def handle_application_error(

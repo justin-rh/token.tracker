@@ -208,6 +208,7 @@ class DisplayController:
         threshold_state: Optional[ThresholdState] = None,  # Phase 2
         pool_state: Optional[PoolState] = None,             # Phase 3 NEW
         web_usage: Optional[WebUsageData] = None,           # Phase 4 NEW
+        last_web_sync: Optional[datetime] = None,           # Phase 4 NEW
     ) -> RenderableType:
         """Create display renderable from data.
 
@@ -286,6 +287,7 @@ class DisplayController:
         processed_data["pool_state"] = pool_state
         # Phase 4: pass web_usage through to session_display via kwargs
         processed_data["web_usage"] = web_usage  # Phase 4 NEW
+        processed_data["last_web_sync"] = last_web_sync  # Phase 4 NEW
 
         try:
             screen_buffer = self.session_display.format_active_session_screen(
