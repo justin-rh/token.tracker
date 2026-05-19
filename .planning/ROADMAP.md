@@ -119,7 +119,13 @@ Plans:
   1. The terminal dashboard shows a ranked list of project folders by token count for the current UTC calendar day, labeled "est." — sourced from JSONL
   2. The terminal dashboard shows a ranked list of project folders by token count for the current billing month, labeled "est." — sourced from JSONL
   3. Per-project token figures remain unchanged when web data is available — web data never overwrites, augments, or mixes with the JSONL per-project rows
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 06-01-PLAN.md — Add ProjectBreakdown frozen dataclass to core/models.py
+- [ ] 06-02-PLAN.md — Create core/project_breakdown.py with compute_project_breakdown() + 7 unit tests
+- [ ] 06-03-PLAN.md — Wire compute_project_breakdown() into monitoring/orchestrator.py (project_breakdown key in monitoring_data)
+- [ ] 06-04-PLAN.md — Restructure ui/session_display.py: remove D-07 rows, move D-08 rows, add D-09 per-project side-by-side columns; smoke-test checkpoint
 
 ## Progress
 
@@ -133,4 +139,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Overage Pool Dashboard | 3/3 | Complete | 2026-05-08 |
 | 4. Web Data Foundation | 6/6 | Complete | 2026-05-19 |
 | 5. System Tray | 2/2 | Complete | 2026-05-19 |
-| 6. Per-Project Breakdown | 0/TBD | Not started | - |
+| 6. Per-Project Breakdown | 0/4 | Not started | - |
