@@ -8,10 +8,10 @@ last_updated: "2026-05-19T00:00:00Z"
 last_activity: 2026-05-19
 progress:
   total_phases: 3
-  completed_phases: 1
-  total_plans: 6
-  completed_plans: 6
-  percent: 100
+  completed_phases: 2
+  total_plans: 8
+  completed_plans: 8
+  percent: 89
 ---
 
 # Project State
@@ -21,19 +21,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Know instantly whether you're on included tokens or burning the $500 overage pool — and how fast.
-**Current focus:** Phase 4 complete — next up: Phase 5 System Tray
+**Current focus:** Phase 6 Per-Project Breakdown — ready to plan
 
 ## Current Position
 
-Phase: Phase 5 — System Tray (not started)
-Plan: 05-01 (next)
-Status: Phase 4 complete — 6/6 plans done
-Last activity: 2026-05-19 — 04-06 complete (CLI auth setup flow, WebPoller wiring, D-24 billing reset log; human-verified "Utilization: 68.1% via claude.ai")
+Phase: Phase 6 — Per-Project Breakdown (not started)
+Plan: 06-01 (next)
+Status: Phase 5 complete — 2/2 plans done (05-01 TrayManager core, 05-02 cli wiring; human smoke-test approved)
+Last activity: 2026-05-19 — 05-02 complete (TrayManager wired into cli/main.py; all 7 smoke-test items approved)
 
 ## Progress Bar
 
 ```
-v2.0: [==============================] 100% (6/6 plans, 1/3 phases)
+v2.0: [==============================] 89% (8/8 plans complete, 2/3 phases complete; Phase 6 not started)
 ```
 
 ## Accumulated Context
@@ -55,6 +55,8 @@ v2.0: [==============================] 100% (6/6 plans, 1/3 phases)
 - v2.0 04-03: WebPoller subclasses threading.Thread directly (daemon=True); Event.wait(300) loop idiom; no join() in stop(); org_id never logged
 - v2.0 04-04: Optional[Any] used for _web_poller type annotation in orchestrator (avoids circular import); web_usage follows pool_state pattern exactly
 - v2.0 04-05: dt_timezone alias used for datetime.timezone (avoids shadowing by 'timezone: str' positional param); _show_threshold_rows guard suppresses Phase 2 block when web_usage present (Pitfall 7)
+- v2.0 05-01: TrayManager uses run_detached() + setup callback for race-free visible=True; CTRL_C_EVENT not SIGINT; OSError fallback in _quit()
+- v2.0 05-02: TrayManager started unconditionally (no org_id guard) — shows -- until first WebPoller result; PowerShell-in-shell window-toggle limitation is known v2.0 scope item
 
 ### Architecture Notes
 
@@ -63,12 +65,12 @@ v2.0: [==============================] 100% (6/6 plans, 1/3 phases)
 - `core/pool_state_manager.py` — accept optional `web_usage` param; web values win when present
 - `monitoring/orchestrator.py` — add `set_web_poller()`, add `web_usage` key to `monitoring_data`
 - `ui/session_display.py` — add web-sourced display rows via `web_usage` kwarg
-- `cli/main.py` — wire WebPoller + TrayManager; stop both in existing `finally` block
+- `cli/main.py` — WebPoller + TrayManager wired; both stopped in existing `finally` block (DONE)
 
-**New modules:**
+**New modules (DONE):**
 - `core/models.py` — `WebUsageData` frozen dataclass (DONE 04-01)
 - `monitoring/web_poller.py` — daemon thread + threading.Event stop + threading.Lock cache (300s interval) (DONE 04-03)
-- `ui/tray_manager.py` — pystray wrapper using `run_detached()`; Pillow color circle
+- `ui/tray_manager.py` — pystray wrapper using `run_detached()`; Pillow color circle (DONE 05-01)
 
 **Threading model:**
 - Main thread: Rich Live display (1s sleep loop)
@@ -78,7 +80,7 @@ v2.0: [==============================] 100% (6/6 plans, 1/3 phases)
 
 ### Pending Todos
 
-- Plan Phase 5: System Tray (pystray + Pillow tray icon, color-coded by utilization %)
+- Plan and execute Phase 6: Per-Project Breakdown (3 requirements: PROJ-01, PROJ-02, PROJ-03)
 
 ### Blockers/Concerns
 
@@ -95,9 +97,10 @@ v2.0: [==============================] 100% (6/6 plans, 1/3 phases)
 | Analytics | ANLX-01: Historical daily pool spend chart | v2.1+ | v2.0 scope definition |
 | Analytics | ANLX-02: Overage pool balance from web API | v2.1+ | v2.0 scope definition |
 | Alerts | ALRT-01: Terminal bell at configurable pool % threshold | v2.1+ | v2.0 scope definition |
+| UX | Window toggle when launched inside existing shell | v2.1+ | 05-02 execution (ctypes GetConsoleWindow returns outer shell HWND) |
 
 ## Session Continuity
 
 Last session: 2026-05-19T00:00:00Z
-Stopped at: Completed 04-06-PLAN.md — Phase 4 complete (6/6 plans)
-Resume file: .planning/phases/05-system-tray/ (not yet created — run /gsd-plan-phase 5)
+Stopped at: Completed 05-02-PLAN.md — Phase 5 complete (2/2 plans, all TRAY requirements satisfied)
+Resume file: .planning/phases/06-per-project/ (not yet created — run /gsd-plan-phase 6)

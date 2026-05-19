@@ -19,7 +19,7 @@ v1.0 delivered Phases 1–3. v2.0 phases are numbered 4–6, continuing the same
 - [x] **Phase 2: Threshold Detection** - Infer the daily included-token limit via P90 with cold-start guard (completed 2026-05-08)
 - [x] **Phase 3: Overage Pool Dashboard** - Display included/overage status, pool spend, burn rate, and projections (completed 2026-05-08)
 - [x] **Phase 4: Web Data Foundation** - Authenticate with claude.ai, fetch authoritative usage data, display it in the terminal dashboard, and poll every 5 minutes (completed 2026-05-19)
-- [ ] **Phase 5: System Tray** - Persistent color-coded tray icon driven by web utilization %, with tooltip, right-click menu, left-click toggle, and clean shutdown
+- [x] **Phase 5: System Tray** - Persistent color-coded tray icon driven by web utilization %, with tooltip, right-click menu, left-click toggle, and clean shutdown (completed 2026-05-19)
 - [ ] **Phase 6: Per-Project Breakdown** - Surface which project folders consumed the most tokens today and this billing month, sourced from local JSONL
 
 ## Phase Details
@@ -108,8 +108,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 05-01-PLAN.md — Add pystray + Pillow dependencies; create ui/tray_manager.py (TrayManager class, color-coded Pillow icon, ctypes window toggle, CTRL_C_EVENT quit)
-- [ ] 05-02-PLAN.md — Wire TrayManager into cli/main.py (import, init, start, update in callback, stop in finally); smoke-test checkpoint
+- [x] 05-01-PLAN.md — Add pystray + Pillow dependencies; create ui/tray_manager.py (TrayManager class, color-coded Pillow icon, ctypes window toggle, CTRL_C_EVENT quit)
+- [x] 05-02-PLAN.md — Wire TrayManager into cli/main.py (import, init, start, update in callback, stop in finally); smoke-test checkpoint
 
 ### Phase 6: Per-Project Breakdown
 **Goal**: Users can see which Claude Code project folders consumed the most tokens today and this billing month, giving context for where usage is coming from
@@ -132,5 +132,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Threshold Detection | 3/3 | Complete | 2026-05-08 |
 | 3. Overage Pool Dashboard | 3/3 | Complete | 2026-05-08 |
 | 4. Web Data Foundation | 6/6 | Complete | 2026-05-19 |
-| 5. System Tray | 0/2 | Not started | - |
+| 5. System Tray | 2/2 | Complete | 2026-05-19 |
 | 6. Per-Project Breakdown | 0/TBD | Not started | - |
