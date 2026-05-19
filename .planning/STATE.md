@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
 milestone: v2.0
-milestone_name: Web-Sourced Usage + System Tray
-status: executing
-stopped_at: ~
-last_updated: "2026-05-19T20:11:34Z"
-last_activity: 2026-05-19
+milestone_name: milestone
+status: completed
+last_updated: "2026-05-19T21:30:00.000Z"
+last_activity: 2026-05-19 — Phase 6 complete; per-project columns in dashboard; D-07/D-08/D-09 layout delivered; 70 tests pass; human smoke-test approved
 progress:
-  total_phases: 3
-  completed_phases: 2
-  total_plans: 12
-  completed_plans: 11
-  percent: 92
+  total_phases: 6
+  completed_phases: 6
+  total_plans: 23
+  completed_plans: 23
+  percent: 100
 ---
 
 # Project State
@@ -21,19 +20,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Know instantly whether you're on included tokens or burning the $500 overage pool — and how fast.
-**Current focus:** Phase 6 Per-Project Breakdown — in progress
+**Current focus:** v2.0 milestone complete — all 6 phases delivered
 
 ## Current Position
 
-Phase: Phase 6 — Per-Project Breakdown (executing)
-Plan: 06-04 (next)
-Status: 06-03 complete — compute_project_breakdown() wired into orchestrator; monitoring_data["project_breakdown"] populated on every cycle; 1 plan remaining
-Last activity: 2026-05-19 — 06-03 executed; import + call site + dict key added to monitoring/orchestrator.py; import check passes
+Phase: Phase 6 — Per-Project Breakdown (complete)
+Plan: all complete
+Status: All 23 plans across 6 phases delivered. v2.0 milestone complete.
+Last activity: 2026-05-19 — 06-04 executed; per-project side-by-side columns in dashboard; D-07/D-08/D-09 layout; human smoke-test approved; 70 tests pass
 
 ## Progress Bar
 
 ```
-v2.0: [========================================] 92% (11/12 plans complete, 2/3 phases complete; Phase 6 in progress 3/4)
+v2.0: [========================================] 100% (23/23 plans complete, 6/6 phases complete)
 ```
 
 ## Accumulated Context
@@ -61,6 +60,7 @@ v2.0: [========================================] 92% (11/12 plans complete, 2/3 
 ### Architecture Notes
 
 **Extended modules (not rebuilt):**
+
 - `core/usage_fetcher.py` — add `fetch_web_usage() -> Optional[WebUsageData]`
 - `core/pool_state_manager.py` — accept optional `web_usage` param; web values win when present
 - `monitoring/orchestrator.py` — add `set_web_poller()`, add `web_usage` key to `monitoring_data`
@@ -68,11 +68,13 @@ v2.0: [========================================] 92% (11/12 plans complete, 2/3 
 - `cli/main.py` — WebPoller + TrayManager wired; both stopped in existing `finally` block (DONE)
 
 **New modules (DONE):**
+
 - `core/models.py` — `WebUsageData` frozen dataclass (DONE 04-01)
 - `monitoring/web_poller.py` — daemon thread + threading.Event stop + threading.Lock cache (300s interval) (DONE 04-03)
 - `ui/tray_manager.py` — pystray wrapper using `run_detached()`; Pillow color circle (DONE 05-01)
 
 **Threading model:**
+
 - Main thread: Rich Live display (1s sleep loop)
 - MonitoringThread: JSONL read + callbacks (existing, 10s)
 - WebPollerThread: claude.ai HTTP fetch (300s Event.wait)
@@ -80,9 +82,8 @@ v2.0: [========================================] 92% (11/12 plans complete, 2/3 
 
 ### Pending Todos
 
-- Execute Phase 6 plan 06-04 (session_display per-project columns + smoke test)
-- v2.0 06-01: list[tuple[str, int]] uses Python 3.11+ built-in generics; no new imports needed in models.py
-- v2.0 06-02: _deduplicate_entries imported from data/reader.py; display_name = slug.split("-")[-1]; encoding="utf-8-sig"; PermissionError caught per-file
+- (none — v2.0 milestone complete)
+- Optional follow-ups from code review: WR-01 (test date skew), WR-02 (display-name collision logging), WR-03 (UTC consistency in billing start), WR-04 (inner f-string padding in per-project rows)
 
 ### Blockers/Concerns
 
@@ -103,6 +104,6 @@ v2.0: [========================================] 92% (11/12 plans complete, 2/3 
 
 ## Session Continuity
 
-Last session: 2026-05-19T20:11:34Z
-Stopped at: Completed 06-03-PLAN.md
+Last session: 2026-05-19T20:49:59.361Z
+Stopped at: context exhaustion at 95% (2026-05-19)
 Resume file: None

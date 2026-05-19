@@ -20,7 +20,7 @@ v1.0 delivered Phases 1–3. v2.0 phases are numbered 4–6, continuing the same
 - [x] **Phase 3: Overage Pool Dashboard** - Display included/overage status, pool spend, burn rate, and projections (completed 2026-05-08)
 - [x] **Phase 4: Web Data Foundation** - Authenticate with claude.ai, fetch authoritative usage data, display it in the terminal dashboard, and poll every 5 minutes (completed 2026-05-19)
 - [x] **Phase 5: System Tray** - Persistent color-coded tray icon driven by web utilization %, with tooltip, right-click menu, left-click toggle, and clean shutdown (completed 2026-05-19)
-- [ ] **Phase 6: Per-Project Breakdown** - Surface which project folders consumed the most tokens today and this billing month, sourced from local JSONL
+- [x] **Phase 6: Per-Project Breakdown** - Surface which project folders consumed the most tokens today and this billing month, sourced from local JSONL (completed 2026-05-19)
 
 ## Phase Details
 
@@ -125,7 +125,7 @@ Plans:
 - [x] 06-01-PLAN.md — Add ProjectBreakdown frozen dataclass to core/models.py
 - [x] 06-02-PLAN.md — Create core/project_breakdown.py with compute_project_breakdown() + 7 unit tests
 - [x] 06-03-PLAN.md — Wire compute_project_breakdown() into monitoring/orchestrator.py (project_breakdown key in monitoring_data)
-- [ ] 06-04-PLAN.md — Restructure ui/session_display.py: remove D-07 rows, move D-08 rows, add D-09 per-project side-by-side columns; smoke-test checkpoint
+- [x] 06-04-PLAN.md — Restructure ui/session_display.py: remove D-07 rows, move D-08 rows, add D-09 per-project side-by-side columns; smoke-test checkpoint
 
 ## Progress
 
@@ -139,4 +139,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Overage Pool Dashboard | 3/3 | Complete | 2026-05-08 |
 | 4. Web Data Foundation | 6/6 | Complete | 2026-05-19 |
 | 5. System Tray | 2/2 | Complete | 2026-05-19 |
-| 6. Per-Project Breakdown | 3/4 | In progress | - |
+| 6. Per-Project Breakdown | 4/4 | Complete | 2026-05-19 |

@@ -61,9 +61,9 @@
 
 ### Per-Project Breakdown
 
-- [ ] **PROJ-01**: Terminal dashboard shows which project folders consumed the most tokens today (current UTC calendar day), sourced from JSONL with "est." prefix
-- [ ] **PROJ-02**: Terminal dashboard shows which project folders consumed the most tokens this billing month, sourced from JSONL with "est." prefix
-- [ ] **PROJ-03**: Per-project token data is sourced exclusively from local JSONL files and is never merged with, replaced by, or attributed to web data
+- [x] **PROJ-01**: Terminal dashboard shows which project folders consumed the most tokens today (current UTC calendar day), sourced from JSONL with "est." prefix
+- [x] **PROJ-02**: Terminal dashboard shows which project folders consumed the most tokens this billing month, sourced from JSONL with "est." prefix
+- [x] **PROJ-03**: Per-project token data is sourced exclusively from local JSONL files and is never merged with, replaced by, or attributed to web data
 
 ## Future Requirements
 
@@ -119,13 +119,13 @@
 | TRAY-03 | Phase 5 — System Tray | Planned |
 | TRAY-04 | Phase 5 — System Tray | Planned |
 | TRAY-05 | Phase 5 — System Tray | Planned |
-| PROJ-01 | Phase 6 — Per-Project Breakdown | Planned |
-| PROJ-02 | Phase 6 — Per-Project Breakdown | Planned |
-| PROJ-03 | Phase 6 — Per-Project Breakdown | Planned |
+| PROJ-01 | Phase 6 — Per-Project Breakdown | Complete |
+| PROJ-02 | Phase 6 — Per-Project Breakdown | Complete |
+| PROJ-03 | Phase 6 — Per-Project Breakdown | Complete |
 
 **Coverage:**
 - v1.0 requirements: 15 total — all complete
-- v2.0 requirements: 15 total — 0 complete, 15 planned
+- v2.0 requirements: 15 total — 13 complete, 2 planned (AUTH-01/02/03 not yet verified as complete in REQUIREMENTS.md)
 - Unmapped: 0
 
 ---
