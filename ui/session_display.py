@@ -24,11 +24,27 @@ from claude_monitor.utils.time_utils import (
 )
 
 
+import re as _re
+import unicodedata as _ud
+
+
 def _fmt_tokens(n: int) -> str:
     """Format token count with 'k' suffix for readability (>= 1000)."""
     if n >= 1000:
         return f"{n / 1000:.1f}k tok"
     return f"{n} tok"
+
+
+def _col_pad(s: str, width: int) -> str:
+    """Pad s so its terminal-visible width reaches `width`.
+
+    f-string :<N counts Python string length, not terminal columns.
+    Rich markup tags ([value], [dim], [/]) are invisible but add string length.
+    Wide chars like 📂 occupy 2 columns but are 1 Python char.
+    """
+    stripped = _re.sub(r'\[/?[^\]]*\]', '', s)
+    visible = sum(2 if _ud.east_asian_width(c) in ('W', 'F') else 1 for c in stripped)
+    return s + ' ' * max(0, width - visible)
 
 
 @dataclass
@@ -321,7 +337,7 @@ class SessionDisplayComponent:
                     right_lines.append("")
                 col_width = 34
                 for left, right in zip(left_lines, right_lines):
-                    screen_buffer.append(f"{left:<{col_width}}{right}")
+                    screen_buffer.append(f"{_col_pad(left, col_width)}{right}")
 
             # Phase 4: Web usage rows (D-17, D-18, D-19 from 04-CONTEXT.md)
             web_usage = kwargs.get("web_usage")
