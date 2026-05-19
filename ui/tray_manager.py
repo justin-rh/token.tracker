@@ -52,6 +52,7 @@ class TrayManager:
         self._shutdown_callback = shutdown_callback
         self._icon: Optional[pystray.Icon] = None
         self._lock = threading.Lock()
+        self._stopped = False
 
     def start(self) -> None:
         """Create pystray Icon and call run_detached().
@@ -81,12 +82,15 @@ class TrayManager:
         logger.info("TrayManager: icon started (run_detached)")
 
     def stop(self) -> None:
-        """Stop the pystray icon cleanly. Safe to call if not started.
+        """Stop the pystray icon cleanly. Safe to call if not started or already stopped.
 
         icon.stop() posts WM_STOP to the win32 message loop which then calls
         _hide() (NIM_DELETE) in its finally block — no ghost icon for clean exits.
+
+        Idempotent: a second call (e.g. from _quit() then finally block) is a no-op.
         """
-        if self._icon is not None:
+        if self._icon is not None and not self._stopped:
+            self._stopped = True
             self._icon.stop()
             logger.info("TrayManager: icon stopped")
 
