@@ -4,14 +4,14 @@ milestone: v2.0
 milestone_name: Web-Sourced Usage + System Tray
 status: executing
 stopped_at: ~
-last_updated: "2026-05-19T20:09:05Z"
+last_updated: "2026-05-19T20:11:34Z"
 last_activity: 2026-05-19
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 12
-  completed_plans: 10
-  percent: 83
+  completed_plans: 11
+  percent: 92
 ---
 
 # Project State
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 ## Current Position
 
 Phase: Phase 6 — Per-Project Breakdown (executing)
-Plan: 06-03 (next)
-Status: 06-02 complete — compute_project_breakdown() factory + 7 unit tests; 2 plans remaining
-Last activity: 2026-05-19 — 06-02 executed; compute_project_breakdown() importable from claude_monitor.core.project_breakdown; all 7 tests pass
+Plan: 06-04 (next)
+Status: 06-03 complete — compute_project_breakdown() wired into orchestrator; monitoring_data["project_breakdown"] populated on every cycle; 1 plan remaining
+Last activity: 2026-05-19 — 06-03 executed; import + call site + dict key added to monitoring/orchestrator.py; import check passes
 
 ## Progress Bar
 
 ```
-v2.0: [==================================] 83% (10/12 plans complete, 2/3 phases complete; Phase 6 in progress 2/4)
+v2.0: [========================================] 92% (11/12 plans complete, 2/3 phases complete; Phase 6 in progress 3/4)
 ```
 
 ## Accumulated Context
@@ -80,7 +80,7 @@ v2.0: [==================================] 83% (10/12 plans complete, 2/3 phases
 
 ### Pending Todos
 
-- Execute Phase 6 plans 06-03 through 06-04 (orchestrator wire-up, session_display + smoke test)
+- Execute Phase 6 plan 06-04 (session_display per-project columns + smoke test)
 - v2.0 06-01: list[tuple[str, int]] uses Python 3.11+ built-in generics; no new imports needed in models.py
 - v2.0 06-02: _deduplicate_entries imported from data/reader.py; display_name = slug.split("-")[-1]; encoding="utf-8-sig"; PermissionError caught per-file
 
@@ -103,6 +103,6 @@ v2.0: [==================================] 83% (10/12 plans complete, 2/3 phases
 
 ## Session Continuity
 
-Last session: 2026-05-19T20:09:05Z
-Stopped at: Completed 06-02-PLAN.md
+Last session: 2026-05-19T20:11:34Z
+Stopped at: Completed 06-03-PLAN.md
 Resume file: None
