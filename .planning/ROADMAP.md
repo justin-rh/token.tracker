@@ -18,7 +18,7 @@ v1.0 delivered Phases 1–3. v2.0 phases are numbered 4–6, continuing the same
 - [x] **Phase 1: Windows Foundation** - Fork and run the tool correctly on Windows with accurate data (completed 2026-05-08)
 - [x] **Phase 2: Threshold Detection** - Infer the daily included-token limit via P90 with cold-start guard (completed 2026-05-08)
 - [x] **Phase 3: Overage Pool Dashboard** - Display included/overage status, pool spend, burn rate, and projections (completed 2026-05-08)
-- [ ] **Phase 4: Web Data Foundation** - Authenticate with claude.ai, fetch authoritative usage data, display it in the terminal dashboard, and poll every 5 minutes
+- [x] **Phase 4: Web Data Foundation** - Authenticate with claude.ai, fetch authoritative usage data, display it in the terminal dashboard, and poll every 5 minutes (completed 2026-05-19)
 - [ ] **Phase 5: System Tray** - Persistent color-coded tray icon driven by web utilization %, with tooltip, right-click menu, left-click toggle, and clean shutdown
 - [ ] **Phase 6: Per-Project Breakdown** - Surface which project folders consumed the most tokens today and this billing month, sourced from local JSONL
 
@@ -93,7 +93,7 @@ Plans:
 - [x] 04-03-PLAN.md — Create monitoring/web_poller.py (WebPoller daemon thread, 300s Event loop, thread-safe cache)
 - [x] 04-04-PLAN.md — Orchestrator wire-up (set_web_poller, web_usage in monitoring_data) + display_controller kwarg pass-through
 - [x] 04-05-PLAN.md — session_display.py: Utilization/Resets In rows (D-17), web-unavailable fallback (D-18), Last web sync footer (D-19)
-- [ ] 04-06-PLAN.md — cli/main.py: auth setup flow (D-08/D-09) + WebPoller start/stop + D-24 billing reset log
+- [x] 04-06-PLAN.md — cli/main.py: auth setup flow (D-08/D-09) + WebPoller start/stop + D-24 billing reset log
 
 ### Phase 5: System Tray
 **Goal**: A persistent tray icon provides at-a-glance utilization status without requiring the terminal window to be visible, with controls to toggle the dashboard and quit cleanly
@@ -128,6 +128,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Windows Foundation | 5/5 | Complete | 2026-05-08 |
 | 2. Threshold Detection | 3/3 | Complete | 2026-05-08 |
 | 3. Overage Pool Dashboard | 3/3 | Complete | 2026-05-08 |
-| 4. Web Data Foundation | 5/6 | In progress | - |
+| 4. Web Data Foundation | 6/6 | Complete | 2026-05-19 |
 | 5. System Tray | 0/TBD | Not started | - |
 | 6. Per-Project Breakdown | 0/TBD | Not started | - |

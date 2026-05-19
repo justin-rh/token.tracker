@@ -4,14 +4,14 @@ milestone: v2.0
 milestone_name: Web-Sourced Usage + System Tray
 status: executing
 stopped_at: ~
-last_updated: "2026-05-19T00:16:51Z"
+last_updated: "2026-05-19T00:00:00Z"
 last_activity: 2026-05-19
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 6
-  completed_plans: 5
-  percent: 83
+  completed_plans: 6
+  percent: 100
 ---
 
 # Project State
@@ -21,19 +21,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Know instantly whether you're on included tokens or burning the $500 overage pool — and how fast.
-**Current focus:** Phase 4 executing — 5/6 plans done
+**Current focus:** Phase 4 complete — next up: Phase 5 System Tray
 
 ## Current Position
 
-Phase: Phase 4 — Web Data Foundation (executing)
-Plan: 04-06 (next)
-Status: Plan 04-05 complete — 5/6 plans done
-Last activity: 2026-05-19 — 04-05 complete (Utilization/Resets In rows D-17, fallback suffix D-18, Last web sync footer D-19 in session_display.py)
+Phase: Phase 5 — System Tray (not started)
+Plan: 05-01 (next)
+Status: Phase 4 complete — 6/6 plans done
+Last activity: 2026-05-19 — 04-06 complete (CLI auth setup flow, WebPoller wiring, D-24 billing reset log; human-verified "Utilization: 68.1% via claude.ai")
 
 ## Progress Bar
 
 ```
-v2.0: [========================      ] 83% (5/6 plans, 0/3 phases)
+v2.0: [==============================] 100% (6/6 plans, 1/3 phases)
 ```
 
 ## Accumulated Context
@@ -78,7 +78,7 @@ v2.0: [========================      ] 83% (5/6 plans, 0/3 phases)
 
 ### Pending Todos
 
-- Execute Phase 4 remaining plan (04-06)
+- Plan Phase 5: System Tray (pystray + Pillow tray icon, color-coded by utilization %)
 
 ### Blockers/Concerns
 
@@ -98,6 +98,6 @@ v2.0: [========================      ] 83% (5/6 plans, 0/3 phases)
 
 ## Session Continuity
 
-Last session: 2026-05-19T00:16:51Z
-Stopped at: Completed 04-05-PLAN.md
-Resume file: .planning/phases/04-web-data-foundation/04-06-PLAN.md
+Last session: 2026-05-19T00:00:00Z
+Stopped at: Completed 04-06-PLAN.md — Phase 4 complete (6/6 plans)
+Resume file: .planning/phases/05-system-tray/ (not yet created — run /gsd-plan-phase 5)
