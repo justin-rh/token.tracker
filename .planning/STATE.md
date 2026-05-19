@@ -4,14 +4,14 @@ milestone: v2.0
 milestone_name: Web-Sourced Usage + System Tray
 status: executing
 stopped_at: ~
-last_updated: "2026-05-19T00:00:00Z"
+last_updated: "2026-05-19T20:05:34Z"
 last_activity: 2026-05-19
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 8
-  completed_plans: 8
-  percent: 89
+  total_plans: 12
+  completed_plans: 9
+  percent: 92
 ---
 
 # Project State
@@ -21,19 +21,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Know instantly whether you're on included tokens or burning the $500 overage pool — and how fast.
-**Current focus:** Phase 6 Per-Project Breakdown — ready to plan
+**Current focus:** Phase 6 Per-Project Breakdown — ready to execute
 
 ## Current Position
 
-Phase: Phase 6 — Per-Project Breakdown (not started)
-Plan: 06-01 (next)
-Status: Phase 5 complete — 2/2 plans done (05-01 TrayManager core, 05-02 cli wiring; human smoke-test approved)
-Last activity: 2026-05-19 — 05-02 complete (TrayManager wired into cli/main.py; all 7 smoke-test items approved)
+Phase: Phase 6 — Per-Project Breakdown (executing)
+Plan: 06-02 (next)
+Status: 06-01 complete — ProjectBreakdown dataclass added to core/models.py; 3 plans remaining
+Last activity: 2026-05-19 — 06-01 executed; ProjectBreakdown frozen dataclass importable from claude_monitor.core.models
 
 ## Progress Bar
 
 ```
-v2.0: [==============================] 89% (8/8 plans complete, 2/3 phases complete; Phase 6 not started)
+v2.0: [================================] 92% (9/12 plans complete, 2/3 phases complete; Phase 6 in progress 1/4)
 ```
 
 ## Accumulated Context
@@ -80,7 +80,8 @@ v2.0: [==============================] 89% (8/8 plans complete, 2/3 phases compl
 
 ### Pending Todos
 
-- Plan and execute Phase 6: Per-Project Breakdown (3 requirements: PROJ-01, PROJ-02, PROJ-03)
+- Execute Phase 6 plans 06-02 through 06-04 (compute + tests, orchestrator wire-up, session_display + smoke test)
+- v2.0 06-01: list[tuple[str, int]] uses Python 3.11+ built-in generics; no new imports needed in models.py
 
 ### Blockers/Concerns
 
@@ -101,6 +102,6 @@ v2.0: [==============================] 89% (8/8 plans complete, 2/3 phases compl
 
 ## Session Continuity
 
-Last session: 2026-05-19T00:00:00Z
-Stopped at: Phase 6 context gathered — ready to plan
-Resume file: .planning/phases/06-per-project-breakdown/06-CONTEXT.md
+Last session: 2026-05-19T20:05:34Z
+Stopped at: Completed 06-01-PLAN.md
+Resume file: None
