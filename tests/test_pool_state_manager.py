@@ -111,15 +111,15 @@ def test_multiple_overage_sessions_summed(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Test 5: Active block — excluded (D-01: only completed sessions)
+# Test 5: Active block — included in pool spend (real-time bar update)
 # ---------------------------------------------------------------------------
 
-def test_active_block_excluded(tmp_path):
-    """Active block with OVERAGE token count → pool_spend_usd=0.0 (active excluded)."""
+def test_active_block_included(tmp_path):
+    """Active block with OVERAGE token count → pool_spend_usd includes cost (real-time)."""
     blocks = [make_block(active=True, tokens=100_000, cost=1.50)]
     result = compute_pool_state(blocks, KNOWN_STATE, config_dir=tmp_path)
 
-    assert result.pool_spend_usd == 0.0
+    assert result.pool_spend_usd == pytest.approx(1.50)
 
 
 # ---------------------------------------------------------------------------

@@ -287,8 +287,9 @@ def compute_pool_state(
     # Sum OVERAGE session costs since log_cutoff (D-01, D-02, D-03)
     pool_spend_usd = seed_usd
     for block in blocks:
-        # Skip active and gap blocks — only completed sessions count (D-01)
-        if block.get("isActive", False) or block.get("isGap", False):
+        # Skip gap blocks (idle placeholders). Active blocks are included so the
+        # pool bar reflects real-time spend during an ongoing session.
+        if block.get("isGap", False):
             continue
         # Skip sessions before the log cutoff (billing period start or seed date)
         if not _in_billing_period(block.get("startTime", ""), log_cutoff):
