@@ -216,3 +216,26 @@ def test_migrate_config_missing_file_no_error(mock_keyring, tmp_path):
     """config.json missing → returns without error."""
     _migrate_config_to_keyring(tmp_path)  # should not raise
     mock_keyring.set_password.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# fetch_web_usage: five_hour.resets_at absent fallback
+# ---------------------------------------------------------------------------
+
+@patch("core.usage_fetcher._read_auth_cookies", return_value=("sk_test", None))
+@patch("core.usage_fetcher.httpx")
+def test_fetch_web_usage_five_hour_no_resets_at_falls_back(mock_httpx, mock_auth, tmp_path):
+    """five_hour present but resets_at absent → falls back to billing cycle reset."""
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.json.return_value = {"five_hour": {"utilization": 30.0}, "extra_usage": None}
+    resp.raise_for_status = MagicMock()
+    mock_httpx.get.return_value = resp
+
+    result = fetch_web_usage("org-xyz", tmp_path)
+
+    assert result is not None
+    assert result.utilization_pct == pytest.approx(30.0)
+    # reset_at should be a future billing-cycle date, not None
+    assert result.reset_at is not None
+    assert result.reset_at.tzinfo is not None
