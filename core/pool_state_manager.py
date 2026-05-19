@@ -207,7 +207,7 @@ def _write_pool_spend_cache(config_dir: Path, pool_state: "PoolState") -> None:
     payload = {
         "pool_spend_usd": pool_state.pool_spend_usd,
         "billing_cycle_start": pool_state.billing_cycle_start,
-        "last_updated": datetime.now().isoformat(),
+        "last_updated": datetime.now(timezone.utc).isoformat(),
     }
     final_path = config_dir / "pool_spend.json"
     temp_file = final_path.with_suffix(".tmp")
