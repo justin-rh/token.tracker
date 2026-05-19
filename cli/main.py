@@ -364,7 +364,10 @@ def _setup_auth(config_dir: Path) -> tuple:
     except Exception:
         cfg = {}
 
-    while True:
+    MAX_AUTH_ATTEMPTS = 3
+    attempts = 0
+    while attempts < MAX_AUTH_ATTEMPTS:
+        attempts = attempts + 1
         session_key, _cf = _read_auth_cookies(config_dir)  # D-06 priority order
 
         if session_key:
@@ -459,6 +462,9 @@ def _setup_auth(config_dir: Path) -> tuple:
                             )
             return session_key, org_id
         # If user pressed Enter with no input, loop and try again
+
+    logging.getLogger(__name__).warning("auth: max attempts reached — launching without web auth")
+    return None, cfg.get("org_id")
 
 
 def handle_application_error(
