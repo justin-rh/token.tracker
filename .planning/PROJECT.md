@@ -35,6 +35,14 @@ Know instantly whether you're on included tokens or burning the $500 overage poo
 - [x] Pool spend persists across terminal restarts via atomic pool_spend.json cache — Phase 3 complete (2026-05-08)
 - [x] Pool size and billing cycle start day are config-editable without code changes — Phase 3 complete (2026-05-08)
 
+### Validated (continued)
+
+- [x] Fetches authoritative plan limits and utilization % from claude.ai via browser cookie auth — Phase 4 complete (2026-05-19)
+- [x] Polls claude.ai every 5 minutes in background; displays web-sourced data in terminal dashboard — Phase 4 complete (2026-05-19)
+- [x] Color-coded system tray icon (green <50%, yellow 50-75%, red >=75%) updates from web utilization % — Phase 5 complete (2026-05-19)
+- [x] Tray tooltip shows utilization % and last sync time; right-click menu has Open Dashboard + Quit — Phase 5 complete (2026-05-19)
+- [x] Quit from tray menu exits cleanly (no ghost icon, no hung process) — Phase 5 complete (2026-05-19)
+
 ### Active
 
 - [ ] Detects whether the session reset model is rolling 5-hour windows or calendar-day
