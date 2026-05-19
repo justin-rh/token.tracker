@@ -186,10 +186,9 @@ class DisplayController:
         # Current time display
         try:
             display_tz = pytz.timezone(args.timezone)
-        except pytz.exceptions.UnknownTimeZoneError:
-            display_tz = pytz.timezone("Europe/Warsaw")
-
-        current_time_display = current_time.astimezone(display_tz)
+            current_time_display = current_time.astimezone(display_tz)
+        except (pytz.exceptions.UnknownTimeZoneError, AttributeError):
+            current_time_display = current_time.astimezone()
         current_time_str = format_display_time(
             current_time_display, time_format, include_seconds=True
         )

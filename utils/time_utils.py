@@ -281,6 +281,20 @@ class TimeFormatDetector:
         return cls.detect_from_system() == "12h"
 
 
+_WINDOWS_TO_IANA: dict[str, str] = {
+    "Eastern Standard Time": "America/New_York",
+    "Central Standard Time": "America/Chicago",
+    "Mountain Standard Time": "America/Denver",
+    "US Mountain Standard Time": "America/Phoenix",
+    "Pacific Standard Time": "America/Los_Angeles",
+    "Alaskan Standard Time": "America/Anchorage",
+    "Hawaiian Standard Time": "Pacific/Honolulu",
+    "Central European Standard Time": "Europe/Warsaw",
+    "GMT Standard Time": "Europe/London",
+    "UTC": "UTC",
+}
+
+
 class SystemTimeDetector:
     """System timezone and time format detection."""
 
@@ -335,7 +349,9 @@ class SystemTimeDetector:
                 tzutil_result: subprocess.CompletedProcess[str] = subprocess.run(
                     ["tzutil", "/g"], capture_output=True, text=True, check=True
                 )
-                return tzutil_result.stdout.strip()
+                windows_tz: str = tzutil_result.stdout.strip()
+                iana_tz: Optional[str] = _WINDOWS_TO_IANA.get(windows_tz)
+                return iana_tz if iana_tz else windows_tz
 
         return "UTC"
 
