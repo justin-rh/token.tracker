@@ -4,14 +4,14 @@ milestone: v2.0
 milestone_name: Web-Sourced Usage + System Tray
 status: executing
 stopped_at: ~
-last_updated: "2026-05-19T20:05:34Z"
+last_updated: "2026-05-19T20:09:05Z"
 last_activity: 2026-05-19
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 12
-  completed_plans: 9
-  percent: 92
+  completed_plans: 10
+  percent: 83
 ---
 
 # Project State
@@ -21,19 +21,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Know instantly whether you're on included tokens or burning the $500 overage pool — and how fast.
-**Current focus:** Phase 6 Per-Project Breakdown — ready to execute
+**Current focus:** Phase 6 Per-Project Breakdown — in progress
 
 ## Current Position
 
 Phase: Phase 6 — Per-Project Breakdown (executing)
-Plan: 06-02 (next)
-Status: 06-01 complete — ProjectBreakdown dataclass added to core/models.py; 3 plans remaining
-Last activity: 2026-05-19 — 06-01 executed; ProjectBreakdown frozen dataclass importable from claude_monitor.core.models
+Plan: 06-03 (next)
+Status: 06-02 complete — compute_project_breakdown() factory + 7 unit tests; 2 plans remaining
+Last activity: 2026-05-19 — 06-02 executed; compute_project_breakdown() importable from claude_monitor.core.project_breakdown; all 7 tests pass
 
 ## Progress Bar
 
 ```
-v2.0: [================================] 92% (9/12 plans complete, 2/3 phases complete; Phase 6 in progress 1/4)
+v2.0: [==================================] 83% (10/12 plans complete, 2/3 phases complete; Phase 6 in progress 2/4)
 ```
 
 ## Accumulated Context
@@ -80,8 +80,9 @@ v2.0: [================================] 92% (9/12 plans complete, 2/3 phases co
 
 ### Pending Todos
 
-- Execute Phase 6 plans 06-02 through 06-04 (compute + tests, orchestrator wire-up, session_display + smoke test)
+- Execute Phase 6 plans 06-03 through 06-04 (orchestrator wire-up, session_display + smoke test)
 - v2.0 06-01: list[tuple[str, int]] uses Python 3.11+ built-in generics; no new imports needed in models.py
+- v2.0 06-02: _deduplicate_entries imported from data/reader.py; display_name = slug.split("-")[-1]; encoding="utf-8-sig"; PermissionError caught per-file
 
 ### Blockers/Concerns
 
@@ -102,6 +103,6 @@ v2.0: [================================] 92% (9/12 plans complete, 2/3 phases co
 
 ## Session Continuity
 
-Last session: 2026-05-19T20:05:34Z
-Stopped at: Completed 06-01-PLAN.md
+Last session: 2026-05-19T20:09:05Z
+Stopped at: Completed 06-02-PLAN.md
 Resume file: None
