@@ -24,6 +24,13 @@ from claude_monitor.utils.time_utils import (
 )
 
 
+def _fmt_tokens(n: int) -> str:
+    """Format token count with 'k' suffix for readability (>= 1000)."""
+    if n >= 1000:
+        return f"{n / 1000:.1f}k tok"
+    return f"{n} tok"
+
+
 @dataclass
 class SessionDisplayData:
     """Data container for session display information.
@@ -187,11 +194,6 @@ class SessionDisplayComponent:
         screen_buffer.extend(header_manager.create_header(plan, timezone))
 
         if plan in ["custom", "pro", "max5", "max20"]:
-            from claude_monitor.core.plans import DEFAULT_COST_LIMIT
-
-            cost_limit_p90 = kwargs.get("cost_limit_p90", DEFAULT_COST_LIMIT)
-            messages_limit_p90 = kwargs.get("messages_limit_p90", 1500)
-
             screen_buffer.append("")
             if plan == "custom":
                 screen_buffer.append("[bold]📊 Session-Based Dynamic Limits[/bold]")
@@ -201,71 +203,6 @@ class SessionDisplayComponent:
                 screen_buffer.append(f"[separator]{'─' * 60}[/]")
             else:
                 screen_buffer.append("")
-
-            cost_percentage = (
-                min(100, percentage(session_cost, cost_limit_p90))
-                if cost_limit_p90 > 0
-                else 0
-            )
-            cost_bar = self._render_wide_progress_bar(cost_percentage)
-            screen_buffer.append(
-                f"💰 [value]Cost Usage:[/]           {cost_bar} {cost_percentage:4.1f}%    [value]${session_cost:.2f}[/] / [dim]${cost_limit_p90:.2f}[/]"
-            )
-            screen_buffer.append("")
-
-            token_bar = self._render_wide_progress_bar(usage_percentage)
-            screen_buffer.append(
-                f"📊 [value]Token Usage:[/]          {token_bar} {usage_percentage:4.1f}%    [value]{tokens_used:,}[/] / [dim]{token_limit:,}[/]"
-            )
-            screen_buffer.append("")
-
-            messages_percentage = (
-                min(100, percentage(sent_messages, messages_limit_p90))
-                if messages_limit_p90 > 0
-                else 0
-            )
-            messages_bar = self._render_wide_progress_bar(messages_percentage)
-            screen_buffer.append(
-                f"📨 [value]Messages Usage:[/]       {messages_bar} {messages_percentage:4.1f}%    [value]{sent_messages}[/] / [dim]{messages_limit_p90:,}[/]"
-            )
-            screen_buffer.append(f"[separator]{'─' * 60}[/]")
-
-            time_percentage = (
-                percentage(elapsed_session_minutes, total_session_minutes)
-                if total_session_minutes > 0
-                else 0
-            )
-            time_bar = self._render_wide_progress_bar(time_percentage)
-            time_remaining = max(0, total_session_minutes - elapsed_session_minutes)
-            time_left_hours = int(time_remaining // 60)
-            time_left_mins = int(time_remaining % 60)
-            screen_buffer.append(
-                f"⏱️  [value]Time to Reset:[/]       {time_bar} {time_left_hours}h {time_left_mins}m"
-            )
-            screen_buffer.append("")
-
-            if per_model_stats:
-                model_bar = self.model_usage.render(per_model_stats)
-                screen_buffer.append(f"🤖 [value]Model Distribution:[/]   {model_bar}")
-            else:
-                model_bar = self.model_usage.render({})
-                screen_buffer.append(f"🤖 [value]Model Distribution:[/]   {model_bar}")
-            screen_buffer.append(f"[separator]{'─' * 60}[/]")
-
-            velocity_emoji = VelocityIndicator.get_velocity_emoji(burn_rate)
-            screen_buffer.append(
-                f"🔥 [value]Burn Rate:[/]              [warning]{burn_rate:.1f}[/] [dim]tokens/min[/] {velocity_emoji}"
-            )
-
-            cost_per_min = (
-                session_cost / max(1, elapsed_session_minutes)
-                if elapsed_session_minutes > 0
-                else 0
-            )
-            cost_per_min_display = CostIndicator.render(cost_per_min)
-            screen_buffer.append(
-                f"💲 [value]Cost Rate:[/]              {cost_per_min_display} [dim]$/min[/]"
-            )
 
             # Phase 2: Threshold Detection rows (D-05, D-06, D-07, D-08, D-09)
             # Phase 4: Suppress threshold rows when web_usage is available (D-17, Pitfall 7)
@@ -368,6 +305,24 @@ class SessionDisplayComponent:
                         f"🔥 [value]Pool burn:[/]    est. ${burn_rate_per_hr:.2f}/hr — {exhaust_str}"
                     )
 
+            # Phase 6: Per-project token breakdown (D-14, PROJ-01, PROJ-02, PROJ-03)
+            project_breakdown = kwargs.get("project_breakdown")
+            if project_breakdown is not None and (project_breakdown.today or project_breakdown.billing_month):
+                screen_buffer.append(f"[separator]{'─' * 60}[/]")
+                left_lines: list[str] = [f"📂 [value]Today (est.)[/]"]
+                right_lines: list[str] = [f"📂 [value]This month (est.)[/]"]
+                for name, toks in (project_breakdown.today or []):
+                    left_lines.append(f"  [dim]{name:<22}[/] {_fmt_tokens(toks)}")
+                for name, toks in (project_breakdown.billing_month or []):
+                    right_lines.append(f"  [dim]{name:<22}[/] {_fmt_tokens(toks)}")
+                while len(left_lines) < len(right_lines):
+                    left_lines.append("")
+                while len(right_lines) < len(left_lines):
+                    right_lines.append("")
+                col_width = 34
+                for left, right in zip(left_lines, right_lines):
+                    screen_buffer.append(f"{left:<{col_width}}{right}")
+
             # Phase 4: Web usage rows (D-17, D-18, D-19 from 04-CONTEXT.md)
             web_usage = kwargs.get("web_usage")
             if web_usage is not None:
@@ -395,6 +350,30 @@ class SessionDisplayComponent:
                     screen_buffer.append(
                         f"🔄 [dim]Last web sync: {last_sync.astimezone().strftime('%H:%M:%S')}[/]"
                     )
+
+                # D-08: Model Distribution, Burn Rate, Cost Rate moved here (Phase 6)
+                if per_model_stats:
+                    model_bar = self.model_usage.render(per_model_stats)
+                    screen_buffer.append(f"🤖 [value]Model Distribution:[/]   {model_bar}")
+                else:
+                    model_bar = self.model_usage.render({})
+                    screen_buffer.append(f"🤖 [value]Model Distribution:[/]   {model_bar}")
+                screen_buffer.append(f"[separator]{'─' * 60}[/]")
+
+                velocity_emoji = VelocityIndicator.get_velocity_emoji(burn_rate)
+                screen_buffer.append(
+                    f"🔥 [value]Burn Rate:[/]              [warning]{burn_rate:.1f}[/] [dim]tokens/min[/] {velocity_emoji}"
+                )
+
+                cost_per_min = (
+                    session_cost / max(1, elapsed_session_minutes)
+                    if elapsed_session_minutes > 0
+                    else 0
+                )
+                cost_per_min_display = CostIndicator.render(cost_per_min)
+                screen_buffer.append(
+                    f"💲 [value]Cost Rate:[/]              {cost_per_min_display} [dim]$/min[/]"
+                )
         else:
             cost_display = CostIndicator.render(session_cost)
             cost_per_min = (
