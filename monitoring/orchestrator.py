@@ -38,6 +38,7 @@ class MonitoringOrchestrator:
         self._update_callbacks: List[Callable[[Dict[str, Any]], None]] = []
         self._last_valid_data: Optional[Dict[str, Any]] = None
         self._args: Optional[Any] = None
+        self._web_poller: Optional[Any] = None  # Phase 4: WebPoller instance (Any avoids circular import)
         self._first_data_event: threading.Event = threading.Event()
 
     def start(self) -> None:
@@ -78,6 +79,18 @@ class MonitoringOrchestrator:
             args: Command line arguments
         """
         self._args = args
+
+    def set_web_poller(self, poller: Any) -> None:
+        """Register the WebPoller instance for web usage data retrieval.
+
+        Called from cli/main.py after WebPoller.start(). The poller's
+        get_web_usage() is called on every monitoring cycle in _fetch_and_process_data().
+        Per D-14 (04-CONTEXT.md).
+
+        Args:
+            poller: WebPoller instance (typed as Any to avoid circular import)
+        """
+        self._web_poller = poller
 
     def register_update_callback(
         self, callback: Callable[[Dict[str, Any]], None]
@@ -195,6 +208,7 @@ class MonitoringOrchestrator:
                 "token_limit": token_limit,           # int — kept for backward compat
                 "threshold_state": threshold_state,   # ThresholdState | None — new in Phase 2
                 "pool_state": pool_state,              # Phase 3 NEW
+                "web_usage": self._web_poller.get_web_usage() if self._web_poller else None,  # Phase 4 NEW
                 "args": self._args,
                 "session_id": self.session_monitor.current_session_id,
                 "session_count": self.session_monitor.session_count,
