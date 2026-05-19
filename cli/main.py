@@ -542,7 +542,7 @@ def validate_cli_environment() -> Optional[str]:
             return f"Python 3.8+ required, found {sys.version_info.major}.{sys.version_info.minor}"
 
         # Check for required dependencies
-        required_modules = ["rich", "pydantic", "watchdog"]
+        required_modules = ["rich", "pydantic"]
         missing_modules: List[str] = []
 
         for module in required_modules:
