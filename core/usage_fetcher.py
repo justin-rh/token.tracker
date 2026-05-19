@@ -381,6 +381,7 @@ def _discover_org_id(session_key: str) -> Optional[str]:
                 "anthropic-client-platform": "web_claude_ai",
             },
             timeout=10,
+            verify=False,
         )
         resp.raise_for_status()
         body = resp.json()
@@ -465,6 +466,7 @@ def fetch_web_usage(org_id: str, config_dir: Path) -> Optional["WebUsageData"]:
                 "anthropic-client-platform": "web_claude_ai",
             },
             timeout=10,
+            verify=False,
         )
 
         if resp.status_code in (401, 403):
