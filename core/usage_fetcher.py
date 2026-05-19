@@ -478,7 +478,12 @@ def fetch_web_usage(org_id: str, config_dir: Path) -> Optional["WebUsageData"]:
 
         resp.raise_for_status()
         body = resp.json()
-        logger.debug("fetch_web_usage: raw response: %s", body)
+        logger.debug(
+            "fetch_web_usage: response keys=%s, five_hour=%s, extra_usage_enabled=%s",
+            list(body.keys()),
+            body.get("five_hour") is not None,
+            bool((body.get("extra_usage") or {}).get("is_enabled")),
+        )
 
         five_hour = body.get("five_hour")
         extra_usage = body.get("extra_usage")
