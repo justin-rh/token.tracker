@@ -29,7 +29,9 @@ import unicodedata as _ud
 
 
 def _fmt_tokens(n: int) -> str:
-    """Format token count with 'k' suffix for readability (>= 1000)."""
+    """Format token count: M for millions, k for thousands, plain otherwise."""
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M tok"
     if n >= 1000:
         return f"{n / 1000:.1f}k tok"
     return f"{n} tok"
@@ -335,7 +337,7 @@ class SessionDisplayComponent:
                     left_lines.append("")
                 while len(right_lines) < len(left_lines):
                     right_lines.append("")
-                col_width = 34
+                col_width = 36
                 for left, right in zip(left_lines, right_lines):
                     screen_buffer.append(f"{_col_pad(left, col_width)}{right}")
 
