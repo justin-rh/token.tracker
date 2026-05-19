@@ -330,9 +330,9 @@ class SessionDisplayComponent:
                 left_lines: list[str] = [f"📂 [value]Today (est.)[/]"]
                 right_lines: list[str] = [f"📂 [value]This month (est.)[/]"]
                 for name, toks in (project_breakdown.today or []):
-                    left_lines.append(f"  [dim]{name:<22}[/] {_fmt_tokens(toks)}")
+                    left_lines.append(f"  [dim]{_col_pad(name, 22)}[/] {_fmt_tokens(toks)}")
                 for name, toks in (project_breakdown.billing_month or []):
-                    right_lines.append(f"  [dim]{name:<22}[/] {_fmt_tokens(toks)}")
+                    right_lines.append(f"  [dim]{_col_pad(name, 22)}[/] {_fmt_tokens(toks)}")
                 while len(left_lines) < len(right_lines):
                     left_lines.append("")
                 while len(right_lines) < len(left_lines):
