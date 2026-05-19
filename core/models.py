@@ -131,6 +131,25 @@ class WebUsageData:
     plan_limit_tokens: Optional[int]  # None for Teams (monthly_limit is cents, not tokens)
 
 
+@dataclass(frozen=True)
+class ProjectBreakdown:
+    """Per-project token breakdown computed from local JSONL files.
+
+    Sourced exclusively from JSONL — never merged with or replaced by web data (PROJ-03).
+
+    Fields:
+        today: Top-5 projects for the current UTC calendar day.
+               Each tuple is (display_name, total_tokens). Sorted descending by total_tokens.
+        billing_month: Top-5 projects for the current billing month.
+                       Same tuple format. Sorted descending by total_tokens.
+        as_of: UTC timestamp when this breakdown was computed.
+    """
+
+    today: list[tuple[str, int]]          # [(display_name, total_tokens), ...] top 5, UTC today
+    billing_month: list[tuple[str, int]]  # [(display_name, total_tokens), ...] top 5, billing month
+    as_of: datetime                       # UTC timestamp when computed
+
+
 def normalize_model_name(model: str) -> str:
     """Normalize model name for consistent usage across the application.
 
