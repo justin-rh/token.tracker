@@ -19,7 +19,7 @@ from data.reader import LOCKED_FILES
 from claude_monitor.core.calculations import calculate_hourly_burn_rate
 from claude_monitor.core.threshold_manager import ThresholdState
 from claude_monitor.core.pool_state_manager import PoolState
-from claude_monitor.core.models import normalize_model_name
+from claude_monitor.core.models import normalize_model_name, WebUsageData
 from claude_monitor.core.plans import Plans
 from claude_monitor.ui.components import (
     AdvancedCustomLimitDisplay,
@@ -207,6 +207,7 @@ class DisplayController:
         token_limit: int,
         threshold_state: Optional[ThresholdState] = None,  # Phase 2
         pool_state: Optional[PoolState] = None,             # Phase 3 NEW
+        web_usage: Optional[WebUsageData] = None,           # Phase 4 NEW
     ) -> RenderableType:
         """Create display renderable from data.
 
@@ -283,6 +284,8 @@ class DisplayController:
         processed_data["threshold_state"] = threshold_state
         # Phase 3: pass pool_state through to session_display via kwargs
         processed_data["pool_state"] = pool_state
+        # Phase 4: pass web_usage through to session_display via kwargs
+        processed_data["web_usage"] = web_usage  # Phase 4 NEW
 
         try:
             screen_buffer = self.session_display.format_active_session_screen(
