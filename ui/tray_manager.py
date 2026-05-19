@@ -103,7 +103,6 @@ class TrayManager:
 
         Thread-safe — called from MonitoringThread on_data_update callback.
         Guards on self._icon is None (called before start() or after stop()).
-        Guards on self._icon.visible (Pitfall 4: setter no-ops if not visible).
         """
         if self._icon is None:
             return
