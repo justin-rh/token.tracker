@@ -1,21 +1,8 @@
 # Claude Token Tracker
 
-## Current Milestone: v2.0 Web-Sourced Usage + System Tray
-
-**Goal:** Replace JSONL-based approximations with authoritative usage data pulled from claude.ai via browser cookies, add a color-coded system tray indicator, and surface per-project token breakdowns.
-
-**Target features:**
-- Browser cookie extraction (Chrome primary, Firefox/Edge fallback) to authenticate with claude.ai/settings/usage
-- Authoritative plan limits + aggregate usage totals from the claude.ai web API
-- Hybrid data layer: web totals merged with JSONL per-project folder breakdown
-- System tray icon (green <50%, yellow 50-75%, red >75% of plan limit)
-- Keep Rich terminal dashboard, updated to use new data sources
-- Monthly usage reset on the 1st of each month
-- Auto-refresh every 5 minutes
-
 ## What This Is
 
-A Windows-compatible terminal dashboard and system tray indicator for Claude Code token usage, forked and adapted from [Claude-Code-Usage-Monitor](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor). v1.0 added Windows support and an overage pool layer. v2.0 switches to authoritative usage data from claude.ai and adds a persistent system tray presence.
+A Windows-compatible terminal dashboard and system tray indicator for Claude Code token usage, forked and adapted from [Claude-Code-Usage-Monitor](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor). v1.0 added Windows support and an overage pool layer. v2.0 switched to authoritative usage data from claude.ai, added a persistent color-coded system tray icon, and surfaced per-project token breakdowns.
 
 ## Core Value
 
@@ -25,65 +12,74 @@ Know instantly whether you're on included tokens or burning the $500 overage poo
 
 ### Validated
 
-- [x] Reads Claude Code session logs from the Windows path — Phase 1 complete (2026-05-08)
-- [x] Infers daily token threshold via P90 percentile with cold-start guard (10-session minimum) — Phase 2 complete (2026-05-08)
-- [x] Shows clear calibrating / P90 / manual threshold indicator in the dashboard — Phase 2 complete (2026-05-08)
-- [x] Displays a clear INCLUDED / OVERAGE indicator for the current period — Phase 3 complete (2026-05-08)
-- [x] Shows est. dollar amount spent from the $500 overage pool in the current billing period — Phase 3 complete (2026-05-08)
-- [x] Shows percentage of the $500 pool remaining via progress bar — Phase 3 complete (2026-05-08)
-- [x] Shows est. burn rate in $/hr and projects when the $500 pool will be exhausted (OVERAGE only) — Phase 3 complete (2026-05-08)
-- [x] Pool spend persists across terminal restarts via atomic pool_spend.json cache — Phase 3 complete (2026-05-08)
-- [x] Pool size and billing cycle start day are config-editable without code changes — Phase 3 complete (2026-05-08)
-
-### Validated (continued)
-
-- [x] Fetches authoritative plan limits and utilization % from claude.ai via browser cookie auth — Phase 4 complete (2026-05-19)
-- [x] Polls claude.ai every 5 minutes in background; displays web-sourced data in terminal dashboard — Phase 4 complete (2026-05-19)
-- [x] Color-coded system tray icon (green <50%, yellow 50-75%, red >=75%) updates from web utilization % — Phase 5 complete (2026-05-19)
-- [x] Tray tooltip shows utilization % and last sync time; right-click menu has Open Dashboard + Quit — Phase 5 complete (2026-05-19)
-- [x] Quit from tray menu exits cleanly (no ghost icon, no hung process) — Phase 5 complete (2026-05-19)
-
-### Validated (continued)
-
-- [x] Per-project token breakdown in terminal dashboard — Today (est.) and This month (est.) side-by-side columns — Phase 6 complete (2026-05-19)
+- ✓ Reads Claude Code session logs from Windows APPDATA path — v1.0 (Phase 1)
+- ✓ requestId deduplication prevents 100–174x token inflation — v1.0 (Phase 1)
+- ✓ Cost figures sourced from statusline.jsonl cost.total_cost_usd — v1.0 (Phase 1)
+- ✓ Full-width Rich dashboard in Windows Terminal, VTP + UTF-8 safe — v1.0 (Phase 1)
+- ✓ P90 threshold inference with 10-session cold-start guard — v1.0 (Phase 2)
+- ✓ Calibrating / auto / manual threshold modes in dashboard — v1.0 (Phase 2)
+- ✓ Prominent INCLUDED / OVERAGE status indicator — v1.0 (Phase 3)
+- ✓ Est. pool spend, progress bar (green→yellow→red), burn rate, exhaustion projection — v1.0 (Phase 3)
+- ✓ Pool spend persists via atomic pool_spend.json across restarts — v1.0 (Phase 3)
+- ✓ Pool size and billing cycle start day configurable in config — v1.0 (Phase 3)
+- ✓ All cost figures carry "est." prefix — v1.0 (Phase 3)
+- ✓ Authoritative 5-hour utilization % and reset time from claude.ai, labeled "via claude.ai" — v2.0 (Phase 4)
+- ✓ WebPoller daemon thread (5-min interval), "Last web sync: HH:MM:SS" in dashboard — v2.0 (Phase 4)
+- ✓ Firefox/Chrome/keyring auth chain; manual sessionKey fallback to Credential Manager — v2.0 (Phase 4)
+- ✓ Graceful fallback to "(est. — web unavailable)" on any fetch failure — v2.0 (Phase 4)
+- ✓ Billing cycle reset detection with INFO log in pool_state_manager.py — v2.0 (Phase 4)
+- ✓ Color-coded system tray icon (green/yellow/red) via pystray + Pillow — v2.0 (Phase 5)
+- ✓ Tray tooltip, right-click menu (Open Dashboard / Quit), left-click window toggle — v2.0 (Phase 5)
+- ✓ Clean tray shutdown via CTRL_C_EVENT — no ghost icons — v2.0 (Phase 5)
+- ✓ Per-project token breakdown — Today (est.) / This month (est.) side-by-side columns — v2.0 (Phase 6)
+- ✓ Per-project data exclusively from JSONL, never merged with web data — v2.0 (Phase 6)
 
 ### Active
 
-- (none — v2.0 milestone complete)
+- (none — v2.0 milestone complete; next requirements emerge from v2.1 planning)
 
 ### Out of Scope
 
-- Linux/Mac support — Windows-first for v1; cross-platform path handling deferred
-- System tray / status bar widget — terminal dashboard covers the need for v1
-- Web UI or browser-based dashboard — out of scope for v1
-- Multi-user / team aggregation — single-user local tool
-- Notification alerts (email, Slack, etc.) — visual dashboard is sufficient
+- Linux/Mac support — Windows-first; cross-platform adds complexity without benefit for this user
+- Web UI or browser-based dashboard — terminal dashboard + system tray covers the need
+- Email/Slack/push notifications — visual dashboard is the interaction model
+- Multi-user / team aggregation — single-user local tool; requires backend infrastructure
+- Overage pool balance from web API — claude.ai usage endpoint returns utilization % only; JSONL accumulation remains the source
+- Historical monthly spend chart — deferred to v2.1 analytics milestone
+- Terminal bell at configurable pool % threshold — deferred to v2.1
 
 ## Context
 
 - **Reference tool**: [Claude-Code-Usage-Monitor](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor) — Python package (v3.1.0), uses Rich for terminal UI, reads `~/.claude/projects/` JSONL files, calculates P90 percentile limits, supports Pro/Max5/Max20 plans
-- **Platform**: Windows 11 Enterprise — the reference tool has Unix path assumptions (`~/.claude/...`) that need adaptation for `C:\Users\...`
-- **Company plan**: Justin is on a company Anthropic plan with an included daily token allocation (exact limit unknown) and a $500 overage pool that silently activates when included tokens are exhausted — no blocked message, no in-product indicator
+- **Platform**: Windows 11 Enterprise — the reference tool has Unix path assumptions adapted for `C:\Users\...`
+- **Company plan**: Justin is on a company Anthropic plan with an included daily token allocation and a $500 overage pool that silently activates when included tokens are exhausted
 - **Primary pain**: No visibility into when usage crosses from included → overage; the $500 pool depletes silently
-- **Tech stack**: Fork the reference Python repo — keep Rich terminal UI, JSONL reader, P90 calculator, pricing engine; extend with overage pool logic and Windows path fixes
+- **Tech stack**: Python, Rich terminal UI, pystray, Pillow, keyring, browser-cookie3, httpx. ~8,731 Python source LOC (excl. tests). Threading model: main thread (Rich Live), MonitoringThread (JSONL, 10s), WebPollerThread (claude.ai HTTP, 300s Event.wait), Tray (pystray run_detached from main thread).
+- **v2.0 key finding**: Cloudflare NOT blocking urllib.request or httpx on claude.ai — no curl_cffi needed. Corporate SSL inspection requires verify=False on httpx calls (matches existing urllib.request behavior).
 
 ## Constraints
 
 - **Platform**: Windows 11 — paths, terminal rendering, and file handling must work on Windows
-- **Data source**: `~/.claude/projects/` JSONL logs — same format as the reference tool; no API access to Anthropic billing data
-- **Threshold**: Daily included-token limit is unknown — must be inferred via P90 percentile, not hardcoded
-- **Pool size**: $500 overage pool — should be user-configurable in case it changes
+- **Data source**: `~/.claude/projects/` JSONL logs for per-project breakdown; claude.ai web API for authoritative totals
+- **Threshold**: Daily included-token limit is unknown — inferred via P90 or replaced by web utilization when available
+- **Pool size**: $500 overage pool — user-configurable in config.json
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Fork the reference tool | Avoids rebuilding JSONL reader, P90 calc, Rich UI from scratch; known working core | Validated Phase 1 |
-| P90 threshold detection | User doesn't know their exact daily limit; P90 of historical sessions that hit limits is the reference tool's proven approach | Validated Phase 2 |
-| $500 pool size is configurable | Pool size could change; hardcoding would require a code change to update | Validated Phase 3 |
-| Windows-first scope | User is on Windows; cross-platform adds complexity without benefit for v1 | Validated Phase 1 |
-| pool_state_manager mirrors ThresholdManager pattern | Consistent frozen dataclass + factory fn pattern; same test fixtures; same config-read fallback | Validated Phase 3 |
-| Burn rate uses current session rate (not historical) | Simpler to compute from in-scope positional params; labeled as "est." to set expectations | Validated Phase 3 |
+| Fork the reference tool | Avoids rebuilding JSONL reader, P90 calc, Rich UI from scratch | ✓ Validated v1.0 |
+| P90 threshold detection | User doesn't know exact daily limit; P90 of historical sessions is proven approach | ✓ Validated v1.0 |
+| $500 pool size is configurable | Pool size could change; hardcoding requires code change | ✓ Validated v1.0 |
+| Windows-first scope | User is on Windows; cross-platform adds complexity without benefit | ✓ Validated v1.0 |
+| pool_state_manager mirrors ThresholdManager pattern | Consistent frozen dataclass + factory fn; same test fixtures | ✓ Validated v1.0 |
+| Burn rate uses current session rate (not historical) | Simpler to compute; labeled as "est." to set expectations | ✓ Validated v1.0 |
+| Firefox-first cookie extraction | Chrome/Edge ABE (v127+) may block browser-cookie3; Firefox is guaranteed path | ✓ Validated v2.0 |
+| WebPoller as daemon thread with Event.wait(300) | Clean stop signal; daemon=True guarantees thread death even if finally skipped | ✓ Validated v2.0 |
+| TrayManager uses run_detached() from main thread | Avoids separate OS thread for pystray; race-free with setup callback | ✓ Validated v2.0 |
+| SSL verify=False on httpx calls | Corporate proxy performs SSL inspection; matches existing urllib.request behavior | ✓ Validated v2.0 |
+| _col_pad() for Rich markup-aware padding | f-string :<N counts Python chars, not terminal columns; breaks on markup + emoji | ✓ Validated v2.0 |
+| Per-project data exclusively from JSONL | Web API returns only aggregate totals; per-project attribution is JSONL-only | ✓ Validated v2.0 |
 
 ## Evolution
 
@@ -103,4 +99,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-19 after Phase 6 completion — milestone v2.0 complete*
+*Last updated: 2026-05-19 after v2.0 milestone — Web-Sourced Usage + System Tray*

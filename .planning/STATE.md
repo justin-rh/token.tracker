@@ -1,10 +1,11 @@
 ---
 gsd_state_version: 1.0
 milestone: v2.0
-milestone_name: milestone
-status: completed
-last_updated: "2026-05-19T21:30:00.000Z"
-last_activity: 2026-05-19 — Phase 6 complete; per-project columns in dashboard; D-07/D-08/D-09 layout delivered; 70 tests pass; human smoke-test approved
+milestone_name: Web-Sourced Usage + System Tray
+status: milestone_archived
+stopped_at: milestone close (2026-05-19)
+last_updated: "2026-05-19T23:45:00.000Z"
+last_activity: 2026-05-19 — v2.0 milestone archived; 6 phases / 23 plans complete; git tag v2.0 pending
 progress:
   total_phases: 6
   completed_phases: 6
@@ -17,10 +18,10 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-18)
+See: .planning/PROJECT.md (updated 2026-05-19)
 
 **Core value:** Know instantly whether you're on included tokens or burning the $500 overage pool — and how fast.
-**Current focus:** v2.0 milestone complete — all 6 phases delivered
+**Current focus:** v2.0 archived — planning next milestone via /gsd-new-milestone
 
 ## Current Position
 
@@ -102,8 +103,16 @@ v2.0: [========================================] 100% (23/23 plans complete, 6/6
 | Alerts | ALRT-01: Terminal bell at configurable pool % threshold | v2.1+ | v2.0 scope definition |
 | UX | Window toggle when launched inside existing shell | v2.1+ | 05-02 execution (ctypes GetConsoleWindow returns outer shell HWND) |
 
+Items acknowledged and deferred at milestone close on 2026-05-19:
+
+| Category | Item | Status |
+|----------|------|--------|
+| uat_gap | Phase 05 — 05-HUMAN-UAT.md | partial |
+| verification_gap | Phase 05 — 05-VERIFICATION.md | human_needed |
+| verification_gap | Phase 06 — 06-VERIFICATION.md | human_needed |
+
 ## Session Continuity
 
-Last session: 2026-05-19T20:49:59.361Z
-Stopped at: context exhaustion at 95% (2026-05-19)
+Last session: 2026-05-19T22:42:41.861Z
+Stopped at: context exhaustion at 99% (2026-05-19)
 Resume file: None

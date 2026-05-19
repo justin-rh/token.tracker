@@ -36,28 +36,28 @@
 
 ### Cookie Authentication
 
-- [ ] **AUTH-01**: Tool automatically extracts the sessionKey cookie from Firefox (primary) or Chrome/Edge (best-effort — may fail on v127+ due to App-Bound Encryption) to authenticate with claude.ai without user intervention
-- [ ] **AUTH-02**: When auto-extraction fails, user can paste a sessionKey value copied from DevTools; the key is stored in Windows Credential Manager via `keyring` and is NOT written to plaintext config files
-- [ ] **AUTH-03**: Stored sessionKey persists across restarts; user is not re-prompted on each launch if a valid key already exists in Credential Manager
+- [x] **AUTH-01**: Tool automatically extracts the sessionKey cookie from Firefox (primary) or Chrome/Edge (best-effort — may fail on v127+ due to App-Bound Encryption) to authenticate with claude.ai without user intervention — Phase 4 complete (2026-05-19)
+- [x] **AUTH-02**: When auto-extraction fails, user can paste a sessionKey value copied from DevTools; the key is stored in Windows Credential Manager via `keyring` and is NOT written to plaintext config files — Phase 4 complete (2026-05-19)
+- [x] **AUTH-03**: Stored sessionKey persists across restarts; user is not re-prompted on each launch if a valid key already exists in Credential Manager — Phase 4 complete (2026-05-19)
 
 ### Web Data
 
-- [ ] **WEBD-01**: Dashboard displays authoritative 5-hour window utilization % sourced from the claude.ai API, labeled "via claude.ai", replacing the P90-inferred INCLUDED/OVERAGE indicator when web data is available
-- [ ] **WEBD-02**: Dashboard displays time remaining until the current 5-hour usage window resets, sourced from claude.ai
-- [ ] **WEBD-03**: When web data is unavailable (fetch failure, Cloudflare block, or not yet configured), dashboard falls back to JSONL-based estimates labeled "(est. — web unavailable)"; no crash, no blank display, no user action required
+- [x] **WEBD-01**: Dashboard displays authoritative 5-hour window utilization % sourced from the claude.ai API, labeled "via claude.ai", replacing the P90-inferred INCLUDED/OVERAGE indicator when web data is available — Phase 4 complete (2026-05-19)
+- [x] **WEBD-02**: Dashboard displays time remaining until the current 5-hour usage window resets, sourced from claude.ai — Phase 4 complete (2026-05-19)
+- [x] **WEBD-03**: When web data is unavailable (fetch failure, Cloudflare block, or not yet configured), dashboard falls back to JSONL-based estimates labeled "(est. — web unavailable)"; no crash, no blank display, no user action required — Phase 4 complete (2026-05-19)
 
 ### System Tray
 
-- [ ] **TRAY-01**: A persistent system tray icon is visible while the app is running; icon color reflects 5-hour window utilization — green (<50%), yellow (50–75%), red (>75%)
-- [ ] **TRAY-02**: Hovering over the tray icon shows a tooltip with the current utilization % and the last web sync time
-- [ ] **TRAY-03**: Right-clicking the tray icon shows a context menu with "Open Dashboard" and "Quit"; selecting Quit triggers clean shutdown identical to Ctrl+C
-- [ ] **TRAY-04**: Left-clicking the tray icon toggles the terminal dashboard window between visible and minimized states
-- [ ] **TRAY-05**: The tray icon is removed cleanly when the app exits — no ghost icons remain in the notification area
+- [x] **TRAY-01**: A persistent system tray icon is visible while the app is running; icon color reflects 5-hour window utilization — green (<50%), yellow (50–75%), red (>75%) — Phase 5 complete (2026-05-19)
+- [x] **TRAY-02**: Hovering over the tray icon shows a tooltip with the current utilization % and the last web sync time — Phase 5 complete (2026-05-19)
+- [x] **TRAY-03**: Right-clicking the tray icon shows a context menu with "Open Dashboard" and "Quit"; selecting Quit triggers clean shutdown identical to Ctrl+C — Phase 5 complete (2026-05-19)
+- [x] **TRAY-04**: Left-clicking the tray icon toggles the terminal dashboard window between visible and minimized states — Phase 5 complete (2026-05-19)
+- [x] **TRAY-05**: The tray icon is removed cleanly when the app exits — no ghost icons remain in the notification area — Phase 5 complete (2026-05-19)
 
 ### Polling & Reset
 
-- [ ] **POLL-01**: A background WebPoller thread re-fetches claude.ai usage data every 5 minutes using `threading.Event` (not `time.sleep`); the terminal dashboard displays "Last web sync: HH:MM:SS" after each successful fetch; polling never blocks the display
-- [ ] **POLL-02**: Accumulated pool spend resets to $0.00 at the start of the configured billing cycle; the reset event is logged to the console; billing cycle start day remains user-configurable in config without code changes
+- [x] **POLL-01**: A background WebPoller thread re-fetches claude.ai usage data every 5 minutes using `threading.Event` (not `time.sleep`); the terminal dashboard displays "Last web sync: HH:MM:SS" after each successful fetch; polling never blocks the display — Phase 4 complete (2026-05-19)
+- [x] **POLL-02**: Accumulated pool spend resets to $0.00 at the start of the configured billing cycle; the reset event is logged to the console; billing cycle start day remains user-configurable in config without code changes — Phase 4 complete (2026-05-19)
 
 ### Per-Project Breakdown
 
@@ -106,28 +106,28 @@
 | OVGE-05 | Phase 3 — Overage Pool Dashboard | Complete |
 | OVGE-06 | Phase 3 — Overage Pool Dashboard | Complete |
 | DISP-02 | Phase 3 — Overage Pool Dashboard | Complete |
-| AUTH-01 | Phase 4 — Web Data Foundation | Planned |
-| AUTH-02 | Phase 4 — Web Data Foundation | Planned |
-| AUTH-03 | Phase 4 — Web Data Foundation | Planned |
-| WEBD-01 | Phase 4 — Web Data Foundation | Planned |
-| WEBD-02 | Phase 4 — Web Data Foundation | Planned |
-| WEBD-03 | Phase 4 — Web Data Foundation | Planned |
-| POLL-01 | Phase 4 — Web Data Foundation | Planned |
-| POLL-02 | Phase 4 — Web Data Foundation | Planned |
-| TRAY-01 | Phase 5 — System Tray | Planned |
-| TRAY-02 | Phase 5 — System Tray | Planned |
-| TRAY-03 | Phase 5 — System Tray | Planned |
-| TRAY-04 | Phase 5 — System Tray | Planned |
-| TRAY-05 | Phase 5 — System Tray | Planned |
+| AUTH-01 | Phase 4 — Web Data Foundation | Complete |
+| AUTH-02 | Phase 4 — Web Data Foundation | Complete |
+| AUTH-03 | Phase 4 — Web Data Foundation | Complete |
+| WEBD-01 | Phase 4 — Web Data Foundation | Complete |
+| WEBD-02 | Phase 4 — Web Data Foundation | Complete |
+| WEBD-03 | Phase 4 — Web Data Foundation | Complete |
+| POLL-01 | Phase 4 — Web Data Foundation | Complete |
+| POLL-02 | Phase 4 — Web Data Foundation | Complete |
+| TRAY-01 | Phase 5 — System Tray | Complete |
+| TRAY-02 | Phase 5 — System Tray | Complete |
+| TRAY-03 | Phase 5 — System Tray | Complete |
+| TRAY-04 | Phase 5 — System Tray | Complete |
+| TRAY-05 | Phase 5 — System Tray | Complete |
 | PROJ-01 | Phase 6 — Per-Project Breakdown | Complete |
 | PROJ-02 | Phase 6 — Per-Project Breakdown | Complete |
 | PROJ-03 | Phase 6 — Per-Project Breakdown | Complete |
 
 **Coverage:**
 - v1.0 requirements: 15 total — all complete
-- v2.0 requirements: 15 total — 13 complete, 2 planned (AUTH-01/02/03 not yet verified as complete in REQUIREMENTS.md)
+- v2.0 requirements: 15 total — all complete
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-07*
-*Last updated: 2026-05-18 — v2.0 traceability updated with phase names*
+*Last updated: 2026-05-19 — all v2.0 requirements marked complete at milestone close*
