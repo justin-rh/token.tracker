@@ -4,6 +4,7 @@ import argparse
 import contextlib
 import json
 import logging
+import os
 import signal
 import sys
 import time
@@ -28,6 +29,7 @@ from claude_monitor.data.analysis import analyze_usage
 from claude_monitor.error_handling import report_error
 from claude_monitor.monitoring.orchestrator import MonitoringOrchestrator
 from claude_monitor.monitoring.web_poller import WebPoller
+from claude_monitor.ui.tray_manager import TrayManager
 from claude_monitor.core.usage_fetcher import (
     _migrate_config_to_keyring,
     _read_auth_cookies,
@@ -116,6 +118,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 1
 
 
+def _tray_shutdown() -> None:
+    """Trigger clean shutdown from pystray thread (identical to Ctrl+C).
+
+    Per RESEARCH.md Pitfall 2-3: use CTRL_C_EVENT not SIGINT on Windows.
+    signal is already imported at the top of this module.
+    """
+    os.kill(os.getpid(), signal.CTRL_C_EVENT)
+
+
 def _run_monitoring(args: argparse.Namespace) -> None:
     """Main monitoring implementation without facade."""
     view_mode = getattr(args, "view", "realtime")
@@ -191,6 +202,10 @@ def _run_monitoring(args: argparse.Namespace) -> None:
                 web_poller.start()
                 orchestrator.set_web_poller(web_poller)
 
+            # Phase 5: Start system tray icon (TRAY-01 through TRAY-05)
+            tray_manager = TrayManager(shutdown_callback=_tray_shutdown)
+            tray_manager.start()
+
             # Setup monitoring callback
             def on_data_update(monitoring_data: Dict[str, Any]) -> None:
                 """Handle data updates from orchestrator."""
@@ -220,6 +235,14 @@ def _run_monitoring(args: argparse.Namespace) -> None:
 
                     if live_display:
                         live_display.update(renderable)
+
+                    # Phase 5: Update tray icon color and tooltip (TRAY-01, TRAY-02)
+                    web_usage = monitoring_data.get("web_usage")
+                    if tray_manager is not None:
+                        tray_manager.update(
+                            utilization_pct=web_usage.utilization_pct if web_usage else None,
+                            last_sync=monitoring_data.get("last_web_sync"),
+                        )
 
                 except Exception as e:
                     logger.error(f"Display update error: {e}", exc_info=True)
@@ -268,6 +291,10 @@ def _run_monitoring(args: argparse.Namespace) -> None:
             # Phase 4: Stop WebPoller daemon thread (signals Event; thread exits on next wake)
             if "web_poller" in locals() and web_poller is not None:
                 web_poller.stop()
+
+            # Phase 5: Stop tray icon (TRAY-05 — no ghost icons)
+            if "tray_manager" in locals() and tray_manager is not None:
+                tray_manager.stop()
 
             # Exit live display context if it was activated
             if live_display_active:
