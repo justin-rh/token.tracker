@@ -4,14 +4,14 @@ milestone: v2.0
 milestone_name: Web-Sourced Usage + System Tray
 status: executing
 stopped_at: ~
-last_updated: "2026-05-18T23:47:29Z"
+last_updated: "2026-05-18T23:58:00Z"
 last_activity: 2026-05-18
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 6
-  completed_plans: 2
-  percent: 33
+  completed_plans: 3
+  percent: 50
 ---
 
 # Project State
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 ## Current Position
 
 Phase: Phase 4 — Web Data Foundation (executing)
-Plan: 04-03 (next)
-Status: Plan 04-02 complete — 2/6 plans done
-Last activity: 2026-05-18 — 04-02 complete (auth refactor + fetch_web_usage + unit tests)
+Plan: 04-04 (next)
+Status: Plan 04-03 complete — 3/6 plans done
+Last activity: 2026-05-18 — 04-03 complete (WebPoller daemon thread, 300s Event loop, Lock-protected cache)
 
 ## Progress Bar
 
 ```
-v2.0: [==========                    ] 33% (2/6 plans, 0/3 phases)
+v2.0: [===============               ] 50% (3/6 plans, 0/3 phases)
 ```
 
 ## Accumulated Context
@@ -52,6 +52,7 @@ v2.0: [==========                    ] 33% (2/6 plans, 0/3 phases)
 - v2.0 04-02: _read_auth_cookies() follows keyring(1) > Firefox(2) > Chrome(3) — D-06 implemented; session_key value never logged
 - v2.0 04-02: five_hour.utilization assumed 0-100 scale (same as extra_usage; ASSUMED comment added); only seen 0.0 in spike
 - v2.0 04-02: Teams reset_at derived from billing_cycle_start_day config (no API resets_at for Teams extra_usage branch)
+- v2.0 04-03: WebPoller subclasses threading.Thread directly (daemon=True); Event.wait(300) loop idiom; no join() in stop(); org_id never logged
 
 ### Architecture Notes
 
@@ -63,8 +64,8 @@ v2.0: [==========                    ] 33% (2/6 plans, 0/3 phases)
 - `cli/main.py` — wire WebPoller + TrayManager; stop both in existing `finally` block
 
 **New modules:**
-- `core/models.py` — `WebUsageData` frozen dataclass
-- `monitoring/web_poller.py` — daemon thread + threading.Event stop + threading.Lock cache (300s interval)
+- `core/models.py` — `WebUsageData` frozen dataclass (DONE 04-01)
+- `monitoring/web_poller.py` — daemon thread + threading.Event stop + threading.Lock cache (300s interval) (DONE 04-03)
 - `ui/tray_manager.py` — pystray wrapper using `run_detached()`; Pillow color circle
 
 **Threading model:**
@@ -75,7 +76,7 @@ v2.0: [==========                    ] 33% (2/6 plans, 0/3 phases)
 
 ### Pending Todos
 
-- Execute Phase 4 (`/gsd-execute-phase 4`)
+- Execute Phase 4 remaining plans (04-04 through 04-06)
 
 ### Blockers/Concerns
 
@@ -95,6 +96,6 @@ v2.0: [==========                    ] 33% (2/6 plans, 0/3 phases)
 
 ## Session Continuity
 
-Last session: 2026-05-18T23:47:29Z
-Stopped at: Completed 04-02-PLAN.md
-Resume file: .planning/phases/04-web-data-foundation/04-03-PLAN.md
+Last session: 2026-05-18T23:58:00Z
+Stopped at: Completed 04-03-PLAN.md
+Resume file: .planning/phases/04-web-data-foundation/04-04-PLAN.md
