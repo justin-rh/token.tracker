@@ -302,6 +302,10 @@ def _run_monitoring(args: argparse.Namespace) -> None:
                     live_display.__exit__(None, None, None)
 
     except KeyboardInterrupt:
+        # Stop tray icon if the inner finally block was skipped
+        if "tray_manager" in locals() and tray_manager is not None:
+            with contextlib.suppress(Exception):
+                tray_manager.stop()
         # Clean exit from live display if it's active
         if "live_display" in locals():
             with contextlib.suppress(Exception):
