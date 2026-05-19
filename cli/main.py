@@ -279,8 +279,8 @@ def _run_monitoring(args: argparse.Namespace) -> None:
             # Use signal.pause() for more efficient waiting
             try:
                 signal.pause()
-            except AttributeError:
-                # Fallback for Windows which doesn't support signal.pause()
+            except (AttributeError, OSError):
+                # Fallback for Windows: signal.pause() raises OSError on Windows
                 while True:
                     time.sleep(1)
         finally:
@@ -600,8 +600,8 @@ def _run_table_view(
             # Use signal.pause() for more efficient waiting
             try:
                 signal.pause()
-            except AttributeError:
-                # Fallback for Windows which doesn't support signal.pause()
+            except (AttributeError, OSError):
+                # Fallback for Windows: signal.pause() raises OSError on Windows
                 while True:
                     time.sleep(1)
         except KeyboardInterrupt:
