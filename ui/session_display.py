@@ -213,14 +213,6 @@ class SessionDisplayComponent:
 
         if plan in ["custom", "pro", "max5", "max20"]:
             screen_buffer.append("")
-            if plan == "custom":
-                screen_buffer.append("[bold]📊 Session-Based Dynamic Limits[/bold]")
-                screen_buffer.append(
-                    "[dim]Based on your historical usage patterns when hitting limits (P90)[/dim]"
-                )
-                screen_buffer.append(f"[separator]{'─' * 60}[/]")
-            else:
-                screen_buffer.append("")
 
             # Phase 2: Threshold Detection rows (D-05, D-06, D-07, D-08, D-09)
             # Phase 4: Suppress threshold rows when web_usage is available (D-17, Pitfall 7)
@@ -304,24 +296,22 @@ class SessionDisplayComponent:
                     f"   {pool_bar} {pct_remaining:.1f}% remaining"
                 )
 
-                # Burn rate + pool exhaustion — OVERAGE state only (D-11, OVGE-04)
+                # Burn rate — OVERAGE state + sufficient ring buffer history (D-09, BURN-01, BURN-02)
+                # pool_burn_rate_usd_per_hr is float | None from monitoring orchestrator ring buffer.
+                # None means <2 spend samples in the 30-min window — row is omitted entirely (BURN-02).
                 if pool_state.is_overage:
-                    # session_cost and elapsed_session_minutes are positional params in scope
-                    burn_rate_per_hr = (
-                        (session_cost / max(1, elapsed_session_minutes)) * 60
-                        if elapsed_session_minutes > 0
-                        else 0.0
-                    )
-                    if burn_rate_per_hr > 0:
-                        remaining_hrs = pool_state.pool_remaining_usd / burn_rate_per_hr
-                        hours = int(remaining_hrs)
-                        mins = int((remaining_hrs - hours) * 60)
-                        exhaust_str = f"~{hours}h {mins}m remaining"
-                    else:
-                        exhaust_str = "—"
-                    screen_buffer.append(
-                        f"🔥 [value]Pool burn:[/]    est. ${burn_rate_per_hr:.2f}/hr — {exhaust_str}"
-                    )
+                    burn_rate_usd_per_hr = kwargs.get("pool_burn_rate_usd_per_hr")
+                    if burn_rate_usd_per_hr is not None:
+                        if burn_rate_usd_per_hr > 0:
+                            remaining_hrs = pool_state.pool_remaining_usd / burn_rate_usd_per_hr
+                            hours = int(remaining_hrs)
+                            mins = int((remaining_hrs - hours) * 60)
+                            exhaust_str = f"~{hours}h {mins}m remaining"
+                        else:
+                            exhaust_str = "—"
+                        screen_buffer.append(
+                            f"🔥 [value]Pool burn:[/]    est. ${burn_rate_usd_per_hr:.2f}/hr — {exhaust_str}"
+                        )
 
             # Phase 6: Per-project token breakdown (D-14, PROJ-01, PROJ-02, PROJ-03)
             project_breakdown = kwargs.get("project_breakdown")
@@ -356,10 +346,12 @@ class SessionDisplayComponent:
                 now_utc = datetime.now(dt_timezone.utc)
                 delta = web_usage.reset_at - now_utc
                 total_secs = max(0, int(delta.total_seconds()))
-                hours, rem = divmod(total_secs, 3600)
+                days, rem = divmod(total_secs, 86400)
+                hours, rem = divmod(rem, 3600)
                 mins = rem // 60
+                reset_str = f"{days}d {hours}h {mins}m" if days else f"{hours}h {mins}m"
                 screen_buffer.append(
-                    f"⏱  [value]Resets in:[/]     {hours}h {mins}m"
+                    f"⏱  [value]Resets in:[/]     {reset_str}"
                 )
 
                 # D-19: Last web sync footer (shown after first successful fetch)
