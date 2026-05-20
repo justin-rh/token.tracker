@@ -56,16 +56,16 @@ Fix the system tray window lifecycle, surface historical spend data, and clean u
 
 | REQ-ID  | Phase | Plan |
 |---------|-------|------|
-| TRAY-01 | TBD   | TBD  |
-| TRAY-02 | TBD   | TBD  |
-| TRAY-03 | TBD   | TBD  |
-| TRAY-04 | TBD   | TBD  |
-| ANLX-01 | TBD   | TBD  |
-| ANLX-02 | TBD   | TBD  |
-| ANLX-03 | TBD   | TBD  |
-| BURN-01 | TBD   | TBD  |
-| BURN-02 | TBD   | TBD  |
-| QUAL-01 | TBD   | TBD  |
-| QUAL-02 | TBD   | TBD  |
-| QUAL-03 | TBD   | TBD  |
-| QUAL-04 | TBD   | TBD  |
+| QUAL-01 | Phase 7 | TBD  |
+| QUAL-02 | Phase 7 | TBD  |
+| QUAL-03 | Phase 7 | TBD  |
+| QUAL-04 | Phase 7 | TBD  |
+| BURN-01 | Phase 8 | TBD  |
+| BURN-02 | Phase 8 | TBD  |
+| TRAY-01 | Phase 9 | TBD  |
+| TRAY-02 | Phase 9 | TBD  |
+| TRAY-03 | Phase 9 | TBD  |
+| TRAY-04 | Phase 9 | TBD  |
+| ANLX-01 | Phase 10 | TBD  |
+| ANLX-02 | Phase 10 | TBD  |
+| ANLX-03 | Phase 10 | TBD  |
