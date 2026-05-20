@@ -139,17 +139,21 @@ def test_gap_block_excluded(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_billing_period_filter_excludes_old_sessions(tmp_path):
-    """Block from 60 days ago excluded; today's block counted."""
-    old_date = (date.today() - timedelta(days=60)).isoformat() + "T10:00:00"
-    today_date = date.today().isoformat() + "T10:00:00"
+    """Block from before current billing cycle excluded; in-period block counted."""
+    # Use a fixed today=2026-05-15 with default cycle_day=1 → billing_start=2026-05-01
+    old_date = "2026-03-01T10:00:00"      # before billing_start → excluded
+    in_period = "2026-05-15T10:00:00"     # on today → included
 
     blocks = [
-        make_block(tokens=100_000, cost=1.50, start_time=old_date),   # too old
-        make_block(tokens=100_000, cost=2.00, start_time=today_date), # in period
+        make_block(tokens=100_000, cost=1.50, start_time=old_date),
+        make_block(tokens=100_000, cost=2.00, start_time=in_period),
     ]
-    result = compute_pool_state(blocks, KNOWN_STATE, config_dir=tmp_path)
+    result = compute_pool_state(
+        blocks, KNOWN_STATE, config_dir=tmp_path,
+        today=date(2026, 5, 15),
+    )
 
-    # Only the today block should be counted
+    # Only the in-period block should be counted
     assert result.pool_spend_usd == pytest.approx(2.00)
 
 
@@ -330,13 +334,35 @@ def test_malformed_seed_usd_logs_warning_and_uses_default(tmp_path, caplog):
 
 
 # ---------------------------------------------------------------------------
-# Test RED: today param accepted by compute_pool_state (Task 1 gate)
+# Test 18: previous-month branch via injected today date
 # ---------------------------------------------------------------------------
 
-def test_compute_pool_state_accepts_today_param(tmp_path):
-    """compute_pool_state must accept a today keyword argument without TypeError."""
+def test_billing_cycle_start_previous_month(tmp_path):
+    """today.day < cycle_day → billing_start rolls back to previous month."""
+    # today=2026-01-15, cycle_day=20 → today.day (15) < cycle_day (20) → prev month
+    # 2026-01-15 prev month with day=20 → 2025-12-20
+    config_file = tmp_path / "config.json"
+    config_file.write_text('{"billing_cycle_start_day": 20}')
     result = compute_pool_state(
         [], KNOWN_STATE, config_dir=tmp_path,
-        today=date(2026, 5, 15),
+        today=date(2026, 1, 15),
     )
-    assert result.billing_cycle_start == "2026-05-01"
+    cycle_start = date.fromisoformat(result.billing_cycle_start)
+    assert cycle_start == date(2025, 12, 20), f"Expected 2025-12-20, got {cycle_start}"
+
+
+# ---------------------------------------------------------------------------
+# Test 19: exact-match branch (today.day == cycle_day)
+# ---------------------------------------------------------------------------
+
+def test_billing_cycle_start_exact_match_day(tmp_path):
+    """today.day == cycle_day → billing_start is today with day replaced."""
+    # today=2026-03-01, cycle_day=1 → today.day (1) >= cycle_day (1) → same month
+    config_file = tmp_path / "config.json"
+    config_file.write_text('{"billing_cycle_start_day": 1}')
+    result = compute_pool_state(
+        [], KNOWN_STATE, config_dir=tmp_path,
+        today=date(2026, 3, 1),
+    )
+    cycle_start = date.fromisoformat(result.billing_cycle_start)
+    assert cycle_start == date(2026, 3, 1), f"Expected 2026-03-01, got {cycle_start}"
