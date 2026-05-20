@@ -327,3 +327,16 @@ def test_malformed_seed_usd_logs_warning_and_uses_default(tmp_path, caplog):
 
     assert "pool_spend_seed_usd" in caplog.text
     assert result.pool_spend_usd == pytest.approx(0.0)
+
+
+# ---------------------------------------------------------------------------
+# Test RED: today param accepted by compute_pool_state (Task 1 gate)
+# ---------------------------------------------------------------------------
+
+def test_compute_pool_state_accepts_today_param(tmp_path):
+    """compute_pool_state must accept a today keyword argument without TypeError."""
+    result = compute_pool_state(
+        [], KNOWN_STATE, config_dir=tmp_path,
+        today=date(2026, 5, 15),
+    )
+    assert result.billing_cycle_start == "2026-05-01"
