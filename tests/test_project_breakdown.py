@@ -279,3 +279,39 @@ def test_zero_token_entries_excluded(tmp_path):
     # zeta should NOT appear in either list (all zero tokens)
     assert "zeta" not in today_dict, f"'zeta' should be excluded from today (zero tokens)"
     assert "zeta" not in month_dict, f"'zeta' should be excluded from billing_month (zero tokens)"
+
+
+# ---------------------------------------------------------------------------
+# Test 8: Display name collision — WARNING logged with both slugs
+# ---------------------------------------------------------------------------
+
+def test_display_name_collision_logs_warning_with_both_slugs(tmp_path, caplog):
+    """Two project slugs sharing a display name → WARNING logged; both slugs identified."""
+    today_str = _today_utc_str()
+
+    # Two slugs whose last segment is "tracker"
+    proj_a = tmp_path / "proj-foo-tracker"
+    proj_a.mkdir()
+    _write_jsonl(proj_a / "session.jsonl", [
+        _make_entry("req-a1", today_str, input_tokens=100, output_tokens=50),
+    ])
+
+    proj_b = tmp_path / "proj-bar-tracker"
+    proj_b.mkdir()
+    _write_jsonl(proj_b / "session.jsonl", [
+        _make_entry("req-b1", today_str, input_tokens=200, output_tokens=100),
+    ])
+
+    with caplog.at_level(logging.WARNING, logger="core.project_breakdown"):
+        compute_project_breakdown(data_path=tmp_path, config_dir=tmp_path)
+
+    # WARNING must be emitted (not just DEBUG)
+    warning_records = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert warning_records, "Expected at least one WARNING log record for display_name collision"
+
+    # Both slug names must appear in the log output
+    assert "proj-foo-tracker" in caplog.text, f"Expected 'proj-foo-tracker' in log, got: {caplog.text}"
+    assert "proj-bar-tracker" in caplog.text, f"Expected 'proj-bar-tracker' in log, got: {caplog.text}"
+
+    # Collision keyword must appear
+    assert "collision" in caplog.text, f"Expected 'collision' in log, got: {caplog.text}"
