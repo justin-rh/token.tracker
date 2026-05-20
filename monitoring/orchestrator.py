@@ -1,5 +1,6 @@
 """Orchestrator for monitoring components."""
 
+import collections
 import logging
 import threading
 import time
@@ -41,6 +42,11 @@ class MonitoringOrchestrator:
         self._args: Optional[Any] = None
         self._web_poller: Optional[Any] = None  # Phase 4: WebPoller instance (Any avoids circular import)
         self._first_data_event: threading.Event = threading.Event()
+
+        # Phase 8: rolling ring buffer for pool burn rate computation (D-01..D-06, 08-CONTEXT.md)
+        self._burn_rate_buffer: collections.deque = collections.deque()  # stores (timestamp: float, pool_spend_usd: float) tuples
+        self._last_burn_sample_spend: float = 0.0   # last pool_spend_usd value inserted into buffer
+        self._last_billing_cycle_start: Optional[str] = None  # detect billing cycle resets (D-06)
 
     def start(self) -> None:
         """Start monitoring."""
@@ -206,12 +212,48 @@ class MonitoringOrchestrator:
             # Phase 6: compute per-project token breakdown from local JSONL files
             project_breakdown = compute_project_breakdown()
 
+            # Phase 8: ring buffer burn rate update (D-01..D-09, 08-CONTEXT.md)
+            # Step 1 — billing cycle reset detection (D-06)
+            if (
+                self._last_billing_cycle_start is not None
+                and pool_state.billing_cycle_start != self._last_billing_cycle_start
+            ):
+                logger.info(
+                    "Burn rate buffer cleared — billing cycle reset detected "
+                    "(old=%s, new=%s)",
+                    self._last_billing_cycle_start,
+                    pool_state.billing_cycle_start,
+                )
+                self._burn_rate_buffer.clear()
+                self._last_burn_sample_spend = 0.0
+            self._last_billing_cycle_start = pool_state.billing_cycle_start
+
+            # Step 2 — sample insertion on spend increase (D-05)
+            if pool_state.pool_spend_usd > self._last_burn_sample_spend:
+                self._burn_rate_buffer.append((time.time(), pool_state.pool_spend_usd))
+                self._last_burn_sample_spend = pool_state.pool_spend_usd
+
+            # Step 3 — compute burn rate from 30-min window (D-07, D-08)
+            _now = time.time()
+            _cutoff = _now - 1800.0
+            _filtered = [s for s in self._burn_rate_buffer if s[0] >= _cutoff]
+            if len(_filtered) >= 2:
+                _oldest, _newest = _filtered[0], _filtered[-1]
+                _delta_spend = _newest[1] - _oldest[1]
+                _delta_sec = _newest[0] - _oldest[0]
+                burn_rate_usd_per_hr: Optional[float] = (
+                    _delta_spend / (_delta_sec / 3600.0) if _delta_sec > 0 else None
+                )
+            else:
+                burn_rate_usd_per_hr = None
+
             # Prepare monitoring data
             monitoring_data: Dict[str, Any] = {
                 "data": data,
                 "token_limit": token_limit,           # int — kept for backward compat
                 "threshold_state": threshold_state,   # ThresholdState | None — new in Phase 2
                 "pool_state": pool_state,              # Phase 3 NEW
+                "pool_burn_rate_usd_per_hr": burn_rate_usd_per_hr,  # Phase 8 NEW
                 "project_breakdown": project_breakdown,  # Phase 6 NEW
                 "web_usage": self._web_poller.get_web_usage() if self._web_poller else None,  # Phase 4 NEW
                 "last_web_sync": self._web_poller.get_last_sync_time() if self._web_poller else None,  # Phase 4 NEW
