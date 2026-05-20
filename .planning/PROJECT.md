@@ -43,16 +43,16 @@ Know instantly whether you're on included tokens or burning the $500 overage poo
 - ✓ Clean tray shutdown via CTRL_C_EVENT — no ghost icons — v2.0 (Phase 5)
 - ✓ Per-project token breakdown — Today (est.) / This month (est.) side-by-side columns — v2.0 (Phase 6)
 - ✓ Per-project data exclusively from JSONL, never merged with web data — v2.0 (Phase 6)
+- ✓ Billing cycle start uses UTC (`datetime.now(timezone.utc).date()`), not local `date.today()` — v2.1 (Phase 7)
+- ✓ Display-name collision logged at WARNING with both slugs identified — v2.1 (Phase 7)
+- ✓ Per-project row columns align correctly via `_col_pad()` for Rich markup + emoji — v2.1 (Phase 7)
+- ✓ Test suite is deterministic — billing period tests use injected fixed dates, no `date.today()` — v2.1 (Phase 7)
 
 ### Active
 
 - Minimize to tray — window hides on close, app stays alive; double-click restores
 - Historical daily pool spend chart in terminal dashboard
 - Pool burn rate derived from pool_spend_usd delta over rolling time window
-- WR-01: test date skew fix
-- WR-02: display-name collision logging
-- WR-03: UTC consistency in billing cycle start
-- WR-04: inner f-string padding in per-project rows
 
 ### Out of Scope
 
@@ -115,4 +115,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-20 — v2.1 milestone started — Polish + Analytics*
+*Last updated: 2026-05-20 — Phase 7 complete — code quality fixes validated*
