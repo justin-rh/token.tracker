@@ -61,7 +61,11 @@ Plans:
   1. The $/hr figure in the dashboard changes only when pool_spend_usd changes, not when session cost or uptime changes
   2. The burn rate row is absent from the display when fewer than two pool_spend_usd samples exist in the rolling window
   3. After pool spend accumulates across multiple monitoring cycles the burn rate stabilizes to a credible $/hr figure
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 08-01-PLAN.md — Add ring buffer state to orchestrator; compute pool_burn_rate_usd_per_hr in _fetch_and_process_data (BURN-01, BURN-02)
+- [ ] 08-02-PLAN.md — Replace inline formula in session_display.py with kwargs read; add test_burn_rate.py (BURN-01, BURN-02)
 
 ### Phase 9: Tray Window Lifecycle
 **Goal**: Users can close the terminal window to minimize the app to the tray, and restore it from the tray without restarting the process
@@ -97,7 +101,7 @@ Plans:
 | 5. System Tray | v2.0 | 2/2 | Complete | 2026-05-19 |
 | 6. Per-Project Breakdown | v2.0 | 4/4 | Complete | 2026-05-19 |
 | 7. Code Quality | v2.1 | 3/3 | Complete | 2026-05-20 |
-| 8. Burn Rate Accuracy | v2.1 | 0/TBD | Not started | - |
+| 8. Burn Rate Accuracy | v2.1 | 0/2 | Not started | - |
 | 9. Tray Window Lifecycle | v2.1 | 0/TBD | Not started | - |
 | 10. Historical Analytics | v2.1 | 0/TBD | Not started | - |
 
