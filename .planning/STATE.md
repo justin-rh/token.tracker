@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Polish + Analytics
-status: roadmap
-stopped_at: ~
+status: planning
+stopped_at: "Phase 7 context gathered"
 last_updated: "2026-05-20T00:00:00.000Z"
-last_activity: 2026-05-20 — Roadmap created for v2.1 (Phases 7–10)
+last_activity: 2026-05-20 — Phase 7 context captured; ready for /gsd-plan-phase 7
 progress:
   total_phases: 4
   completed_phases: 0
