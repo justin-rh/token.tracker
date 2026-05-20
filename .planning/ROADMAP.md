@@ -46,7 +46,12 @@
   2. When two projects share a display name, a WARNING log line identifies both paths and the collision
   3. Billing cycle start comparisons use UTC-normalized datetimes and never raise timezone-offset errors
   4. Per-project row columns align correctly in the terminal even when project names contain Rich markup characters
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 07-01-PLAN.md — Add today param to _derive_billing_cycle_start + compute_pool_state; update tests (WR-01, WR-03)
+- [ ] 07-02-PLAN.md — Bump display_name collision log to WARNING with both slugs; add collision test (WR-02)
+- [ ] 07-03-PLAN.md — Add _col_pad unit tests + human spot-check checkpoint (WR-04)
 
 ### Phase 8: Burn Rate Accuracy
 **Goal**: Pool burn rate shown in the dashboard reflects actual pool_spend_usd velocity over a rolling window rather than current-session cost divided by elapsed time
@@ -91,7 +96,7 @@
 | 4. Web Data Foundation | v2.0 | 6/6 | Complete | 2026-05-19 |
 | 5. System Tray | v2.0 | 2/2 | Complete | 2026-05-19 |
 | 6. Per-Project Breakdown | v2.0 | 4/4 | Complete | 2026-05-19 |
-| 7. Code Quality | v2.1 | 0/TBD | Not started | - |
+| 7. Code Quality | v2.1 | 0/3 | Not started | - |
 | 8. Burn Rate Accuracy | v2.1 | 0/TBD | Not started | - |
 | 9. Tray Window Lifecycle | v2.1 | 0/TBD | Not started | - |
 | 10. Historical Analytics | v2.1 | 0/TBD | Not started | - |
