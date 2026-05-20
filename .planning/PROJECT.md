@@ -47,12 +47,12 @@ Know instantly whether you're on included tokens or burning the $500 overage poo
 - ✓ Display-name collision logged at WARNING with both slugs identified — v2.1 (Phase 7)
 - ✓ Per-project row columns align correctly via `_col_pad()` for Rich markup + emoji — v2.1 (Phase 7)
 - ✓ Test suite is deterministic — billing period tests use injected fixed dates, no `date.today()` — v2.1 (Phase 7)
+- ✓ Pool burn rate derived from pool_spend_usd ring buffer delta over 30-min window; row hidden until ≥2 samples — v2.1 (Phase 8)
 
 ### Active
 
 - Minimize to tray — window hides on close, app stays alive; double-click restores
 - Historical daily pool spend chart in terminal dashboard
-- Pool burn rate derived from pool_spend_usd delta over rolling time window
 
 ### Out of Scope
 

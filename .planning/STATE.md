@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Polish + Analytics
-status: ready_to_plan
-stopped_at: "Phase 8 context gathered — ready to plan Phase 8"
+status: planning
+stopped_at: "Phase 8 complete — 2/2 plans, verified; next: /gsd-discuss-phase 9"
 last_updated: "2026-05-20T00:00:00.000Z"
-last_activity: 2026-05-20 — Phase 8 context gathered (4 areas discussed); next: /gsd-plan-phase 8
+last_activity: 2026-05-20 — Phase 8 executed and verified (BURN-01, BURN-02 satisfied, 83 tests pass); next: discuss/plan Phase 9
 progress:
   total_phases: 4
-  completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
-  percent: 25
+  completed_phases: 2
+  total_plans: 7
+  completed_plans: 5
+  percent: 50
 ---
 
 # Project State
@@ -21,19 +21,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-20)
 
 **Core value:** Know instantly whether you're on included tokens or burning the $500 overage pool — and how fast.
-**Current focus:** v2.1 Phase 7 planned — ready to execute via /gsd-execute-phase 7
+**Current focus:** v2.1 Phase 8 planned — ready to execute via /gsd-execute-phase 8
 
 ## Current Position
 
-Phase: 7 (planned — 3 plans in Wave 1, ready to execute)
-Plan: 07-01 (WR-01+03), 07-02 (WR-02), 07-03 (WR-04)
-Status: Plans verified; ready for /gsd-execute-phase 7
-Last activity: 2026-05-20 — Phase 7 planned (3 plans, all Wave 1 parallel, checker passed)
+Phase: 9 (not yet planned — Tray Window Lifecycle)
+Plan: —
+Status: Phase 8 complete; ready to discuss/plan Phase 9
+Last activity: 2026-05-20 — Phase 8 executed (2/2 plans, BURN-01+BURN-02, 83 tests pass, verified)
 
 ## Progress Bar
 
 ```
-v2.1: [                                        ] 0% (0/3 plans complete, 0/4 phases complete)
+v2.1: [####################                    ] 50% (2/4 phases complete)
 ```
 
 ## Accumulated Context

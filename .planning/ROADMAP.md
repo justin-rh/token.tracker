@@ -31,7 +31,7 @@
 **Milestone Goal:** Fix system tray window lifecycle, surface historical spend analytics, improve burn rate accuracy, and resolve four carried-forward code quality issues.
 
 - [x] **Phase 7: Code Quality** — Four isolated correctness fixes with no cross-module dependencies — completed 2026-05-20
-- [ ] **Phase 8: Burn Rate Accuracy** — Derive $/hr from pool_spend_usd delta over a rolling time window
+- [x] **Phase 8: Burn Rate Accuracy** — Derive $/hr from pool_spend_usd delta over a rolling time window — completed 2026-05-20
 - [ ] **Phase 9: Tray Window Lifecycle** — Window hides on close; tray icon restores it on double-click or menu
 - [ ] **Phase 10: Historical Analytics** — Daily pool spend bar chart rendered inline in the terminal dashboard
 
@@ -101,7 +101,7 @@ Plans:
 | 5. System Tray | v2.0 | 2/2 | Complete | 2026-05-19 |
 | 6. Per-Project Breakdown | v2.0 | 4/4 | Complete | 2026-05-19 |
 | 7. Code Quality | v2.1 | 3/3 | Complete | 2026-05-20 |
-| 8. Burn Rate Accuracy | v2.1 | 0/2 | Not started | - |
+| 8. Burn Rate Accuracy | v2.1 | 2/2 | Complete | 2026-05-20 |
 | 9. Tray Window Lifecycle | v2.1 | 0/TBD | Not started | - |
 | 10. Historical Analytics | v2.1 | 0/TBD | Not started | - |
 
