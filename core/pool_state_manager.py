@@ -128,14 +128,20 @@ def _read_pool_config(config_dir: Path) -> Tuple[float, int, float, Optional[dat
     return pool_size, cycle_day, seed_usd, seed_cutoff, all_sessions
 
 
-def _derive_billing_cycle_start(cycle_day: int) -> date:
+def _derive_billing_cycle_start(cycle_day: int, today: date | None = None) -> date:
     """Derive the most recent billing cycle start date from today and cycle_day.
 
     If today.day >= cycle_day → this month's cycle_day.
     Otherwise → previous month's cycle_day.
     Wraps in try/except for invalid day values (belt-and-suspenders beyond config validation).
+
+    Args:
+        cycle_day: Day of month when billing cycle starts (1-28).
+        today: Reference date. Defaults to datetime.now(timezone.utc).date() (UTC).
+               Pass a fixed date in tests for determinism.
     """
-    today = date.today()
+    if today is None:
+        today = datetime.now(timezone.utc).date()
     try:
         if today.day >= cycle_day:
             return today.replace(day=cycle_day)
@@ -223,6 +229,7 @@ def compute_pool_state(
     blocks: list,
     threshold_state,  # ThresholdState | None
     config_dir: Optional[Path] = None,
+    today: Optional[date] = None,
 ) -> "PoolState":
     """Compute pool spend state from serialized block dicts and threshold state.
 
@@ -246,7 +253,7 @@ def compute_pool_state(
     pool_size_usd, cycle_day, seed_usd, seed_cutoff, all_sessions = _read_pool_config(config_dir)
 
     # Determine billing cycle start — check cache first (D-06, Pitfall 4)
-    current_cycle_start = _derive_billing_cycle_start(cycle_day)
+    current_cycle_start = _derive_billing_cycle_start(cycle_day, today=today)
     cycle_start: date
 
     cached = _read_pool_spend_cache(config_dir)
