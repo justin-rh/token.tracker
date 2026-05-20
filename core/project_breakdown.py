@@ -143,19 +143,21 @@ def compute_project_breakdown(
 
     today_tokens: dict[str, int] = defaultdict(int)
     month_tokens: dict[str, int] = defaultdict(int)
+    slug_map: dict[str, str] = {}
 
     for file_path in _find_jsonl_files(data_path):
         slug = file_path.parent.name
         # D-01: display name is the last hyphen-separated segment of the slug.
         # Known limitation: two project directories that share the same last segment
-        # (e.g. two clones of "tracker") will have their token counts merged silently.
+        # (e.g. two clones of "tracker") will have their token counts merged.
         display_name = slug.split("-")[-1]
-        if display_name in today_tokens or display_name in month_tokens:
-            logger.debug(
-                "project_breakdown: display_name collision for '%s' (slug=%s) — "
-                "tokens merged into existing key",
-                display_name, slug,
+        if display_name in slug_map:
+            logger.warning(
+                "project_breakdown: display_name collision — '%s' claimed by both '%s' and '%s' — tokens merged",
+                display_name, slug_map[display_name], slug,
             )
+        else:
+            slug_map[display_name] = slug
 
         raw_parsed: list = []
         try:
