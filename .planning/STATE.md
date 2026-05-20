@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: Web-Sourced Usage + System Tray
-status: milestone_archived
-stopped_at: milestone close (2026-05-19)
-last_updated: "2026-05-19T23:45:00.000Z"
-last_activity: 2026-05-19 — v2.0 milestone archived; 6 phases / 23 plans complete; git tag v2.0 pending
+milestone: v2.1
+milestone_name: Polish + Analytics
+status: requirements
+stopped_at: ~
+last_updated: "2026-05-20T00:00:00.000Z"
+last_activity: 2026-05-20 — Milestone v2.1 started
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 23
-  completed_plans: 23
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,15 +25,15 @@ See: .planning/PROJECT.md (updated 2026-05-19)
 
 ## Current Position
 
-Phase: Phase 6 — Per-Project Breakdown (complete)
-Plan: all complete
-Status: All 23 plans across 6 phases delivered. v2.0 milestone complete.
-Last activity: 2026-05-19 — 06-04 executed; per-project side-by-side columns in dashboard; D-07/D-08/D-09 layout; human smoke-test approved; 70 tests pass
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-05-20 — Milestone v2.1 started
 
 ## Progress Bar
 
 ```
-v2.0: [========================================] 100% (23/23 plans complete, 6/6 phases complete)
+v2.1: [                                        ] 0% (0/0 plans complete, 0/0 phases complete)
 ```
 
 ## Accumulated Context

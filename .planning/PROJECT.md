@@ -1,8 +1,18 @@
 # Claude Token Tracker
 
+## Current Milestone: v2.1 Polish + Analytics
+
+**Goal:** Fix the system tray window lifecycle, surface historical spend data, and clean up accuracy/quality issues carried forward from v2.0.
+
+**Target features:**
+- Minimize to tray — window hides on close, app stays alive; double-click restores
+- Historical daily pool spend chart in the terminal dashboard
+- Pool burn rate accuracy — derive $/hr from pool_spend_usd delta over a rolling time window
+- Code quality fixes: WR-01 (test date skew), WR-02 (display-name collision logging), WR-03 (UTC billing-cycle consistency), WR-04 (f-string padding)
+
 ## What This Is
 
-A Windows-compatible terminal dashboard and system tray indicator for Claude Code token usage, forked and adapted from [Claude-Code-Usage-Monitor](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor). v1.0 added Windows support and an overage pool layer. v2.0 switched to authoritative usage data from claude.ai, added a persistent color-coded system tray icon, and surfaced per-project token breakdowns.
+A Windows-compatible terminal dashboard and system tray indicator for Claude Code token usage, forked and adapted from [Claude-Code-Usage-Monitor](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor). v1.0 added Windows support and an overage pool layer. v2.0 switched to authoritative usage data from claude.ai, added a persistent color-coded system tray icon, and surfaced per-project token breakdowns. v2.1 focuses on tray window lifecycle, analytics, and polish.
 
 ## Core Value
 
@@ -36,7 +46,13 @@ Know instantly whether you're on included tokens or burning the $500 overage poo
 
 ### Active
 
-- (none — v2.0 milestone complete; next requirements emerge from v2.1 planning)
+- Minimize to tray — window hides on close, app stays alive; double-click restores
+- Historical daily pool spend chart in terminal dashboard
+- Pool burn rate derived from pool_spend_usd delta over rolling time window
+- WR-01: test date skew fix
+- WR-02: display-name collision logging
+- WR-03: UTC consistency in billing cycle start
+- WR-04: inner f-string padding in per-project rows
 
 ### Out of Scope
 
@@ -99,4 +115,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-19 after v2.0 milestone — Web-Sourced Usage + System Tray*
+*Last updated: 2026-05-20 — v2.1 milestone started — Polish + Analytics*
