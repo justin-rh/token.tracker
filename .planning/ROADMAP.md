@@ -30,7 +30,7 @@
 
 **Milestone Goal:** Fix system tray window lifecycle, surface historical spend analytics, improve burn rate accuracy, and resolve four carried-forward code quality issues.
 
-- [ ] **Phase 7: Code Quality** — Four isolated correctness fixes with no cross-module dependencies
+- [x] **Phase 7: Code Quality** — Four isolated correctness fixes with no cross-module dependencies — completed 2026-05-20
 - [ ] **Phase 8: Burn Rate Accuracy** — Derive $/hr from pool_spend_usd delta over a rolling time window
 - [ ] **Phase 9: Tray Window Lifecycle** — Window hides on close; tray icon restores it on double-click or menu
 - [ ] **Phase 10: Historical Analytics** — Daily pool spend bar chart rendered inline in the terminal dashboard
@@ -51,7 +51,7 @@
 Plans:
 - [x] 07-01-PLAN.md — Add today param to _derive_billing_cycle_start + compute_pool_state; update tests (WR-01, WR-03)
 - [x] 07-02-PLAN.md — Bump display_name collision log to WARNING with both slugs; add collision test (WR-02)
-- [ ] 07-03-PLAN.md — Add _col_pad unit tests + human spot-check checkpoint (WR-04)
+- [x] 07-03-PLAN.md — Add _col_pad unit tests + human spot-check checkpoint (WR-04)
 
 ### Phase 8: Burn Rate Accuracy
 **Goal**: Pool burn rate shown in the dashboard reflects actual pool_spend_usd velocity over a rolling window rather than current-session cost divided by elapsed time
@@ -96,7 +96,7 @@ Plans:
 | 4. Web Data Foundation | v2.0 | 6/6 | Complete | 2026-05-19 |
 | 5. System Tray | v2.0 | 2/2 | Complete | 2026-05-19 |
 | 6. Per-Project Breakdown | v2.0 | 4/4 | Complete | 2026-05-19 |
-| 7. Code Quality | v2.1 | 2/3 | In progress | - |
+| 7. Code Quality | v2.1 | 3/3 | Complete | 2026-05-20 |
 | 8. Burn Rate Accuracy | v2.1 | 0/TBD | Not started | - |
 | 9. Tray Window Lifecycle | v2.1 | 0/TBD | Not started | - |
 | 10. Historical Analytics | v2.1 | 0/TBD | Not started | - |
