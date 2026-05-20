@@ -232,6 +232,7 @@ def _run_monitoring(args: argparse.Namespace) -> None:
                         web_usage=monitoring_data.get("web_usage"),                      # Phase 4 NEW
                         last_web_sync=monitoring_data.get("last_web_sync"),              # Phase 4 NEW
                         project_breakdown=monitoring_data.get("project_breakdown"),      # Phase 6 NEW
+                        pool_burn_rate_usd_per_hr=monitoring_data.get("pool_burn_rate_usd_per_hr"),  # Phase 8 NEW
                     )
 
                     if live_display:

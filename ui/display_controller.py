@@ -209,6 +209,7 @@ class DisplayController:
         web_usage: Optional[WebUsageData] = None,           # Phase 4 NEW
         last_web_sync: Optional[datetime] = None,           # Phase 4 NEW
         project_breakdown: Optional[Any] = None,            # Phase 6 NEW
+        pool_burn_rate_usd_per_hr: Optional[float] = None,  # Phase 8 NEW
     ) -> RenderableType:
         """Create display renderable from data.
 
@@ -289,6 +290,7 @@ class DisplayController:
         processed_data["web_usage"] = web_usage  # Phase 4 NEW
         processed_data["last_web_sync"] = last_web_sync  # Phase 4 NEW
         processed_data["project_breakdown"] = project_breakdown  # Phase 6 NEW
+        processed_data["pool_burn_rate_usd_per_hr"] = pool_burn_rate_usd_per_hr  # Phase 8 NEW
 
         try:
             screen_buffer = self.session_display.format_active_session_screen(
