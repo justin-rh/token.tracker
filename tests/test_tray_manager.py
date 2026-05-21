@@ -275,3 +275,136 @@ class TestInstallCloseGuardConstants:
         from claude_monitor.ui.tray_manager import TrayManager
         tray = TrayManager(shutdown_callback=lambda: None)
         assert tray._original_wndproc == 0
+
+
+class TestCloseGuard:
+    """Tests for TrayManager._install_close_guard() PID guard and callback behavior."""
+
+    def _make_tray(self):
+        from claude_monitor.ui.tray_manager import TrayManager
+        return TrayManager(shutdown_callback=lambda: None)
+
+    def test_no_hwnd_skips_subclassing(self):
+        """When GetConsoleWindow returns 0, no subclassing occurs."""
+        tray = self._make_tray()
+        with patch("claude_monitor.ui.tray_manager.ctypes") as mock_ctypes:
+            mock_ctypes.windll.kernel32.GetConsoleWindow.return_value = 0
+            tray._install_close_guard()
+        assert tray._wndproc_cb is None
+        assert tray._original_wndproc == 0
+
+    def test_shell_owned_hwnd_skips_subclassing(self):
+        """When console window is owned by shell (pid != os.getpid()), skip subclassing."""
+        tray = self._make_tray()
+
+        with patch("claude_monitor.ui.tray_manager.ctypes") as mock_ctypes:
+            mock_ctypes.windll.kernel32.GetConsoleWindow.return_value = 0x1234
+            mock_ctypes.c_ulong.return_value = MagicMock(value=os.getpid() + 9999)
+            mock_ctypes.windll.user32.GetWindowThreadProcessId.side_effect = None
+            tray._install_close_guard()
+
+        assert tray._wndproc_cb is None
+        assert tray._original_wndproc == 0
+
+    def test_process_owned_hwnd_installs_wndproc(self):
+        """When console window is owned by this process, SetWindowLongPtrW is called."""
+        from claude_monitor.ui.tray_manager import TrayManager, GWLP_WNDPROC, WNDPROC
+        tray = TrayManager(shutdown_callback=lambda: None)
+
+        fake_hwnd = 0xABCD
+        fake_original_proc = 0x5678
+
+        with (
+            patch("claude_monitor.ui.tray_manager.ctypes.windll.kernel32") as kern32,
+            patch("claude_monitor.ui.tray_manager.ctypes.windll.user32") as user32,
+            patch("claude_monitor.ui.tray_manager.ctypes.c_ulong") as c_ulong,
+            patch("claude_monitor.ui.tray_manager.ctypes.byref"),
+            patch("claude_monitor.ui.tray_manager.WNDPROC") as mock_wndproc_type,
+        ):
+            kern32.GetConsoleWindow.return_value = fake_hwnd
+            pid_mock = MagicMock()
+            pid_mock.value = os.getpid()
+            c_ulong.return_value = pid_mock
+            user32.SetWindowLongPtrW.return_value = fake_original_proc
+            mock_wndproc_type.return_value = MagicMock()
+
+            tray._install_close_guard()
+
+            user32.SetWindowLongPtrW.assert_called_once_with(
+                fake_hwnd, GWLP_WNDPROC, mock_wndproc_type.return_value
+            )
+            assert tray._original_wndproc == fake_original_proc
+            assert tray._wndproc_cb is not None
+
+    def test_wm_close_callback_returns_zero_and_hides(self):
+        """WM_CLOSE message: ShowWindow(SW_HIDE) called, return value is 0, CallWindowProcW not called."""
+        from claude_monitor.ui.tray_manager import WM_CLOSE, SW_HIDE
+
+        fake_hwnd = 0xABCD
+        fake_original_proc = 0x5678
+
+        with (
+            patch("claude_monitor.ui.tray_manager.ctypes.windll.kernel32") as kern32,
+            patch("claude_monitor.ui.tray_manager.ctypes.windll.user32") as user32,
+            patch("claude_monitor.ui.tray_manager.ctypes.c_ulong") as c_ulong,
+            patch("claude_monitor.ui.tray_manager.ctypes.byref"),
+        ):
+            kern32.GetConsoleWindow.return_value = fake_hwnd
+            pid_mock = MagicMock()
+            pid_mock.value = os.getpid()
+            c_ulong.return_value = pid_mock
+            user32.SetWindowLongPtrW.return_value = fake_original_proc
+
+            tray = self._make_tray()
+            tray._install_close_guard()
+
+            # Retrieve the actual inner closure stored as _wndproc_cb
+            # by extracting from the SetWindowLongPtrW call args
+            captured_cb = user32.SetWindowLongPtrW.call_args[0][2]
+
+            # Reset call tracking for ShowWindow
+            user32.ShowWindow.reset_mock()
+            user32.CallWindowProcW.reset_mock()
+
+            # Simulate Windows calling the WNDPROC with WM_CLOSE
+            result = captured_cb(fake_hwnd, WM_CLOSE, 0, 0)
+
+            user32.ShowWindow.assert_called_once_with(fake_hwnd, SW_HIDE)
+            user32.CallWindowProcW.assert_not_called()
+            assert result == 0
+
+    def test_non_wm_close_message_delegates_to_original(self):
+        """Non-WM_CLOSE messages are forwarded to CallWindowProcW, ShowWindow not called."""
+        from claude_monitor.ui.tray_manager import WM_CLOSE, SW_HIDE
+
+        WM_PAINT = 0x000F  # arbitrary non-WM_CLOSE message
+        fake_hwnd = 0xABCD
+        fake_original_proc = 0x5678
+
+        with (
+            patch("claude_monitor.ui.tray_manager.ctypes.windll.kernel32") as kern32,
+            patch("claude_monitor.ui.tray_manager.ctypes.windll.user32") as user32,
+            patch("claude_monitor.ui.tray_manager.ctypes.c_ulong") as c_ulong,
+            patch("claude_monitor.ui.tray_manager.ctypes.byref"),
+        ):
+            kern32.GetConsoleWindow.return_value = fake_hwnd
+            pid_mock = MagicMock()
+            pid_mock.value = os.getpid()
+            c_ulong.return_value = pid_mock
+            user32.SetWindowLongPtrW.return_value = fake_original_proc
+            user32.CallWindowProcW.return_value = 1
+
+            tray = self._make_tray()
+            tray._install_close_guard()
+
+            captured_cb = user32.SetWindowLongPtrW.call_args[0][2]
+
+            user32.ShowWindow.reset_mock()
+            user32.CallWindowProcW.reset_mock()
+
+            result = captured_cb(fake_hwnd, WM_PAINT, 0, 0)
+
+            user32.CallWindowProcW.assert_called_once_with(
+                fake_original_proc, fake_hwnd, WM_PAINT, 0, 0
+            )
+            user32.ShowWindow.assert_not_called()
