@@ -10,10 +10,10 @@ Fix the system tray window lifecycle, surface historical spend data, and clean u
 
 ### Tray Window Lifecycle
 
-- [ ] **TRAY-01**: User can close the terminal window and the app continues running in the system tray
-- [ ] **TRAY-02**: User can double-click the tray icon to restore the terminal window
-- [ ] **TRAY-03**: Tray icon tooltip continues showing current utilization % while window is hidden
-- [ ] **TRAY-04**: "Open Dashboard" right-click menu item restores the window when it is hidden
+- [x] **TRAY-01**: User can close the terminal window and the app continues running in the system tray
+- [x] **TRAY-02**: User can double-click the tray icon to restore the terminal window
+- [x] **TRAY-03**: Tray icon tooltip continues showing current utilization % while window is hidden
+- [x] **TRAY-04**: "Open Dashboard" right-click menu item restores the window when it is hidden
 
 ### Historical Analytics
 
@@ -62,10 +62,10 @@ Fix the system tray window lifecycle, surface historical spend data, and clean u
 | QUAL-04 | Phase 7 | TBD  |
 | BURN-01 | Phase 8 | TBD  |
 | BURN-02 | Phase 8 | TBD  |
-| TRAY-01 | Phase 9 | TBD  |
-| TRAY-02 | Phase 9 | TBD  |
-| TRAY-03 | Phase 9 | TBD  |
-| TRAY-04 | Phase 9 | TBD  |
+| TRAY-01 | Phase 9 | 09-01  |
+| TRAY-02 | Phase 9 | 09-02  |
+| TRAY-03 | Phase 9 | 09-01  |
+| TRAY-04 | Phase 9 | 09-02  |
 | ANLX-01 | Phase 10 | TBD  |
 | ANLX-02 | Phase 10 | TBD  |
 | ANLX-03 | Phase 10 | TBD  |

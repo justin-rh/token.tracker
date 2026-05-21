@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Polish + Analytics
-status: in_progress
-stopped_at: "Phase 9 plan 01 complete — 09-02 is next"
-last_updated: "2026-05-21T16:54:36Z"
-last_activity: 2026-05-21 — Phase 9 plan 01 executed (WNDPROC close guard, 13 new tests, 96/96 pass)
+status: completed
+stopped_at: "Phase 9 plan 01 complete — next: /gsd-execute-phase 9 (09-02)"
+last_updated: "2026-05-21T17:28:33.187Z"
+last_activity: 2026-05-21 — Phase 9 plan 02 executed (SetForegroundWindow, TestCloseGuard, 33/33 tests pass)
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 8
-  completed_plans: 6
-  percent: 75
+  completed_plans: 8
+  percent: 100
 ---
 
 # Project State
@@ -25,15 +25,15 @@ See: .planning/PROJECT.md (updated 2026-05-20)
 
 ## Current Position
 
-Phase: 9 (Tray Window Lifecycle — in progress)
-Plan: 09-02 (SetForegroundWindow + end-to-end tests)
-Status: 09-01 complete (WNDPROC close guard); 09-02 ready to execute
-Last activity: 2026-05-21 — Phase 9 plan 01 executed (WNDPROC close guard, 13 new tests, 96/96 pass)
+Phase: 9 (Tray Window Lifecycle — complete)
+Plan: 09-02 complete (SetForegroundWindow + TestCloseGuard)
+Status: Phase 9 complete — both plans executed; all TRAY requirements satisfied
+Last activity: 2026-05-21 — Phase 9 plan 02 executed (SetForegroundWindow, TestCloseGuard, 33/33 tests pass)
 
 ## Progress Bar
 
 ```
-v2.1: [##############################          ] 75% (3/4 phases nearing complete — Phase 9 in progress)
+v2.1: [######################################  ] 95% (Phase 9 complete — Phase 10 ANLX remaining)
 ```
 
 ## Accumulated Context
@@ -61,6 +61,7 @@ v2.1: [##############################          ] 75% (3/4 phases nearing complet
 - v2.1: Phase 9 (TRAY) parallel-eligible with Phase 8 but sequenced after to keep plan scope tight; both depend only on Phase 7
 - v2.1: Phase 10 (ANLX) depends on Phase 8 — chart data source is pool_state_manager billing-period block iteration; burn rate ring buffer work in Phase 8 may touch same module
 - v2.1 09-01: WNDPROC subclassing uses SetWindowLongPtrW (64-bit-safe) + CallWindowProcW; WM_CLOSE handler returns 0 (never calls DefWindowProc); _install_close_guard() extracted as private method for testability; PID guard skips subclassing silently in shell context
+- v2.1 09-02: SetForegroundWindow added to restore path only (D-05/D-06) — _show_console() and _toggle_console() else branch; TestCloseGuard uses module-level ctypes patching; WNDPROC callback tested by extracting closure from SetWindowLongPtrW.call_args
 
 ### Architecture Notes
 
@@ -122,5 +123,5 @@ Items acknowledged and deferred at milestone close on 2026-05-19:
 ## Session Continuity
 
 Last session: 2026-05-21
-Stopped at: Phase 9 plan 01 complete — next: /gsd-execute-phase 9 (09-02)
+Stopped at: Phase 9 complete (09-02 done) — next: /gsd-execute-phase 10 (ANLX)
 Resume file: None
