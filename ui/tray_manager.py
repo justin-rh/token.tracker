@@ -23,19 +23,11 @@ logger = logging.getLogger(__name__)
 SW_HIDE = 0
 SW_RESTORE = 9
 
-# Windows WNDPROC subclassing constants
-WM_CLOSE = 0x0010
-GWLP_WNDPROC = -4
-SW_SHOW = 5
+# SetConsoleCtrlHandler event types
+CTRL_CLOSE_EVENT = 2
 
-# WNDPROC callback type: (hwnd, msg, wParam, lParam) -> LRESULT
-WNDPROC = ctypes.WINFUNCTYPE(
-    ctypes.c_long,       # return type: LRESULT
-    ctypes.c_void_p,     # hwnd
-    ctypes.c_uint,       # msg
-    ctypes.c_size_t,     # wParam
-    ctypes.c_size_t,     # lParam
-)
+# Callback type for SetConsoleCtrlHandler: (dwCtrlType: DWORD) -> BOOL
+_HandlerRoutine = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_ulong)
 
 # Utilization color thresholds (per TRAY-01 and STATE.md)
 _COLOR_GREEN  = (34, 197, 94)   # <50% utilization
@@ -67,8 +59,7 @@ class TrayManager:
         self._icon: Optional[pystray.Icon] = None
         self._lock = threading.Lock()
         self._stopped = False
-        self._wndproc_cb: Optional[ctypes.WINFUNCTYPE] = None   # prevents GC of callback
-        self._original_wndproc: int = 0                          # restored in stop()
+        self._ctrl_handler_cb: Optional[ctypes.WINFUNCTYPE] = None  # prevents GC of callback
 
     def start(self) -> None:
         """Create pystray Icon and call run_detached().
@@ -101,21 +92,16 @@ class TrayManager:
     def stop(self) -> None:
         """Stop the pystray icon cleanly. Safe to call if not started or already stopped.
 
-        D-08: Restore original WNDPROC before stopping the icon to avoid leaving a
-        dangling hook that could crash the process during cleanup.
-
         Idempotent: a second call (e.g. from _quit() then finally block) is a no-op.
         """
         if self._icon is not None and not self._stopped:
             self._stopped = True
-            # D-08: restore original WNDPROC before icon teardown
-            if self._original_wndproc:
-                hwnd = ctypes.windll.kernel32.GetConsoleWindow()
-                if hwnd:
-                    ctypes.windll.user32.SetWindowLongPtrW(
-                        hwnd, GWLP_WNDPROC, self._original_wndproc
-                    )
-                    logger.info("TrayManager: WNDPROC restored")
+            if self._ctrl_handler_cb is not None:
+                ctypes.windll.kernel32.SetConsoleCtrlHandler(
+                    self._ctrl_handler_cb, False
+                )
+                self._ctrl_handler_cb = None
+                logger.info("TrayManager: CTRL_CLOSE_EVENT handler removed")
             self._icon.stop()
             logger.info("TrayManager: icon stopped")
 
@@ -195,34 +181,26 @@ class TrayManager:
             ctypes.windll.user32.SetForegroundWindow(hwnd)
 
     def _install_close_guard(self) -> None:
-        """Subclass the console WNDPROC to intercept WM_CLOSE (D-01 through D-04).
+        """Register a CTRL_CLOSE_EVENT handler so the X button hides to tray.
 
-        When WM_CLOSE is received:
-          - Calls ShowWindow(hwnd, SW_HIDE) to minimize to tray
-          - Returns 0 — does NOT call DefWindowProc (which would destroy the window)
+        Uses SetConsoleCtrlHandler (in-process API) rather than WNDPROC subclassing.
+        WNDPROC subclassing via SetWindowLongPtrW requires the target window to belong
+        to the same process — the console window belongs to conhost.exe, so it fails.
 
-        PID guard (D-04): if the console window is owned by the shell (PowerShell/cmd
-        launched this process), skip subclassing and log INFO. The X button will close
-        the shell normally in that case.
-
-        Stores self._wndproc_cb (prevents CPython GC of the ctypes callback) and
-        self._original_wndproc (restored in stop()).
+        Only installed when this process is the sole owner of the console (count==1).
+        When running inside an existing shell (count>1), the guard is skipped so the
+        shell's X button behaves normally.
         """
         hwnd = ctypes.windll.kernel32.GetConsoleWindow()
         if not hwnd:
             logger.info("TrayManager: no console window — close guard skipped")
             return
 
-        # D-04: verify this process is the sole owner of the console.
-        # GetWindowThreadProcessId returns conhost.exe's PID (never os.getpid()),
-        # so we use GetConsoleProcessList instead: count==1 means no shell is sharing
-        # this console; count>1 means cmd.exe/PowerShell owns it too.
         proc_buf = (ctypes.c_ulong * 64)()
         console_proc_count = ctypes.windll.kernel32.GetConsoleProcessList(
             proc_buf, 64
         )
-        owns_console = (console_proc_count == 1)
-        if not owns_console:
+        if console_proc_count != 1:
             logger.info(
                 "TrayManager: console shared with %d other process(es) "
                 "— close guard skipped",
@@ -230,24 +208,20 @@ class TrayManager:
             )
             return
 
-        # D-02: define callback — must be stored as instance attr to prevent GC
-        def _wndproc(hwnd: int, msg: int, wparam: int, lparam: int) -> int:
-            if msg == WM_CLOSE:
-                # D-01 / D-07: hide to tray silently; do NOT call DefWindowProc
+        def _ctrl_handler(ctrl_type: int) -> bool:
+            if ctrl_type == CTRL_CLOSE_EVENT:
                 ctypes.windll.user32.ShowWindow(hwnd, SW_HIDE)
-                return 0
-            # All other messages: forward to original window procedure
-            return ctypes.windll.user32.CallWindowProcW(
-                self._original_wndproc, hwnd, msg, wparam, lparam
-            )
+                return True  # handled — suppress default termination
+            return False
 
-        self._wndproc_cb = WNDPROC(_wndproc)
-
-        # D-01: subclass the window procedure; save original for restore
-        self._original_wndproc = ctypes.windll.user32.SetWindowLongPtrW(
-            hwnd, GWLP_WNDPROC, self._wndproc_cb
+        self._ctrl_handler_cb = _HandlerRoutine(_ctrl_handler)
+        result = ctypes.windll.kernel32.SetConsoleCtrlHandler(
+            self._ctrl_handler_cb, True
         )
-        logger.info("TrayManager: WM_CLOSE guard installed (hwnd=0x%x)", hwnd)
+        if result:
+            logger.info("TrayManager: CTRL_CLOSE_EVENT handler installed")
+        else:
+            logger.warning("TrayManager: SetConsoleCtrlHandler failed")
 
     def _quit(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         """Trigger clean shutdown identical to Ctrl+C (TRAY-03 Quit).
