@@ -213,16 +213,20 @@ class TrayManager:
             logger.info("TrayManager: no console window — close guard skipped")
             return
 
-        # D-04: verify this process owns the console window
-        pid = ctypes.c_ulong()
-        ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-        owns_console = (pid.value == os.getpid())
+        # D-04: verify this process is the sole owner of the console.
+        # GetWindowThreadProcessId returns conhost.exe's PID (never os.getpid()),
+        # so we use GetConsoleProcessList instead: count==1 means no shell is sharing
+        # this console; count>1 means cmd.exe/PowerShell owns it too.
+        proc_buf = (ctypes.c_ulong * 64)()
+        console_proc_count = ctypes.windll.kernel32.GetConsoleProcessList(
+            proc_buf, 64
+        )
+        owns_console = (console_proc_count == 1)
         if not owns_console:
             logger.info(
-                "TrayManager: console window owned by shell (pid=%d, ours=%d) "
+                "TrayManager: console shared with %d other process(es) "
                 "— close guard skipped",
-                pid.value,
-                os.getpid(),
+                console_proc_count - 1,
             )
             return
 

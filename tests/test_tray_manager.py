@@ -145,69 +145,47 @@ class TestInstallCloseGuardNoConsole:
 
 
 class TestInstallCloseGuardShellContext:
-    """_install_close_guard() when the console window is owned by the shell (PID mismatch)."""
+    """_install_close_guard() when the console is shared with a parent shell (count > 1)."""
 
-    def test_foreign_pid_returns_without_subclassing(self):
+    def test_shared_console_returns_without_subclassing(self):
         from claude_monitor.ui.tray_manager import TrayManager
         tray = TrayManager(shutdown_callback=lambda: None)
         fake_hwnd = 0xABCD
-        foreign_pid = os.getpid() + 9999  # guaranteed different from ours
-
-        def fake_get_window_thread_process_id(hwnd, pid_ptr):
-            # Write the foreign PID into the byref pointer
-            pid_ptr._obj.value = foreign_pid
-            return 1
 
         with patch("ctypes.windll") as mock_windll:
             mock_windll.kernel32.GetConsoleWindow.return_value = fake_hwnd
-            mock_windll.user32.GetWindowThreadProcessId.side_effect = (
-                fake_get_window_thread_process_id
-            )
+            mock_windll.kernel32.GetConsoleProcessList.return_value = 2  # shell + us
             tray._install_close_guard()
 
         assert tray._wndproc_cb is None
         assert tray._original_wndproc == 0
 
-    def test_foreign_pid_does_not_call_set_window_long_ptr(self):
+    def test_shared_console_does_not_call_set_window_long_ptr(self):
         from claude_monitor.ui.tray_manager import TrayManager
         tray = TrayManager(shutdown_callback=lambda: None)
         fake_hwnd = 0xABCD
-        foreign_pid = os.getpid() + 9999
-
-        def fake_get_window_thread_process_id(hwnd, pid_ptr):
-            pid_ptr._obj.value = foreign_pid
-            return 1
 
         with patch("ctypes.windll") as mock_windll:
             mock_windll.kernel32.GetConsoleWindow.return_value = fake_hwnd
-            mock_windll.user32.GetWindowThreadProcessId.side_effect = (
-                fake_get_window_thread_process_id
-            )
+            mock_windll.kernel32.GetConsoleProcessList.return_value = 2  # shell + us
             tray._install_close_guard()
 
         mock_windll.user32.SetWindowLongPtrW.assert_not_called()
 
 
 class TestInstallCloseGuardOwnsConsole:
-    """_install_close_guard() when this process owns the console window."""
+    """_install_close_guard() when this process is the sole owner of the console (count=1)."""
 
     def _make_tray_with_own_console(self):
         """Return a TrayManager and the mock_windll after _install_close_guard() runs."""
         from claude_monitor.ui.tray_manager import TrayManager
         tray = TrayManager(shutdown_callback=lambda: None)
         fake_hwnd = 0xABCD
-        our_pid = os.getpid()
         fake_original_proc = 0x1234
-
-        def fake_get_window_thread_process_id(hwnd, pid_ptr):
-            pid_ptr._obj.value = our_pid
-            return 1
 
         with patch("ctypes.windll") as mock_windll:
             mock_windll.kernel32.GetConsoleWindow.return_value = fake_hwnd
-            mock_windll.user32.GetWindowThreadProcessId.side_effect = (
-                fake_get_window_thread_process_id
-            )
+            mock_windll.kernel32.GetConsoleProcessList.return_value = 1  # sole owner
             mock_windll.user32.SetWindowLongPtrW.return_value = fake_original_proc
             tray._install_close_guard()
 
@@ -225,17 +203,10 @@ class TestInstallCloseGuardOwnsConsole:
         from claude_monitor.ui.tray_manager import TrayManager, GWLP_WNDPROC
         tray = TrayManager(shutdown_callback=lambda: None)
         fake_hwnd = 0xABCD
-        our_pid = os.getpid()
-
-        def fake_get_window_thread_process_id(hwnd, pid_ptr):
-            pid_ptr._obj.value = our_pid
-            return 1
 
         with patch("ctypes.windll") as mock_windll:
             mock_windll.kernel32.GetConsoleWindow.return_value = fake_hwnd
-            mock_windll.user32.GetWindowThreadProcessId.side_effect = (
-                fake_get_window_thread_process_id
-            )
+            mock_windll.kernel32.GetConsoleProcessList.return_value = 1  # sole owner
             mock_windll.user32.SetWindowLongPtrW.return_value = 0x1234
             tray._install_close_guard()
 
@@ -294,21 +265,20 @@ class TestCloseGuard:
         assert tray._original_wndproc == 0
 
     def test_shell_owned_hwnd_skips_subclassing(self):
-        """When console window is owned by shell (pid != os.getpid()), skip subclassing."""
+        """When console is shared with a shell (count > 1), skip subclassing."""
         tray = self._make_tray()
 
         with patch("claude_monitor.ui.tray_manager.ctypes") as mock_ctypes:
             mock_ctypes.windll.kernel32.GetConsoleWindow.return_value = 0x1234
-            mock_ctypes.c_ulong.return_value = MagicMock(value=os.getpid() + 9999)
-            mock_ctypes.windll.user32.GetWindowThreadProcessId.side_effect = None
+            mock_ctypes.windll.kernel32.GetConsoleProcessList.return_value = 2
             tray._install_close_guard()
 
         assert tray._wndproc_cb is None
         assert tray._original_wndproc == 0
 
     def test_process_owned_hwnd_installs_wndproc(self):
-        """When console window is owned by this process, SetWindowLongPtrW is called."""
-        from claude_monitor.ui.tray_manager import TrayManager, GWLP_WNDPROC, WNDPROC
+        """When this process is sole console owner (count=1), SetWindowLongPtrW is called."""
+        from claude_monitor.ui.tray_manager import TrayManager, GWLP_WNDPROC
         tray = TrayManager(shutdown_callback=lambda: None)
 
         fake_hwnd = 0xABCD
@@ -317,14 +287,10 @@ class TestCloseGuard:
         with (
             patch("claude_monitor.ui.tray_manager.ctypes.windll.kernel32") as kern32,
             patch("claude_monitor.ui.tray_manager.ctypes.windll.user32") as user32,
-            patch("claude_monitor.ui.tray_manager.ctypes.c_ulong") as c_ulong,
-            patch("claude_monitor.ui.tray_manager.ctypes.byref"),
             patch("claude_monitor.ui.tray_manager.WNDPROC") as mock_wndproc_type,
         ):
             kern32.GetConsoleWindow.return_value = fake_hwnd
-            pid_mock = MagicMock()
-            pid_mock.value = os.getpid()
-            c_ulong.return_value = pid_mock
+            kern32.GetConsoleProcessList.return_value = 1
             user32.SetWindowLongPtrW.return_value = fake_original_proc
             mock_wndproc_type.return_value = MagicMock()
 
@@ -346,13 +312,9 @@ class TestCloseGuard:
         with (
             patch("claude_monitor.ui.tray_manager.ctypes.windll.kernel32") as kern32,
             patch("claude_monitor.ui.tray_manager.ctypes.windll.user32") as user32,
-            patch("claude_monitor.ui.tray_manager.ctypes.c_ulong") as c_ulong,
-            patch("claude_monitor.ui.tray_manager.ctypes.byref"),
         ):
             kern32.GetConsoleWindow.return_value = fake_hwnd
-            pid_mock = MagicMock()
-            pid_mock.value = os.getpid()
-            c_ulong.return_value = pid_mock
+            kern32.GetConsoleProcessList.return_value = 1
             user32.SetWindowLongPtrW.return_value = fake_original_proc
 
             tray = self._make_tray()
@@ -384,13 +346,9 @@ class TestCloseGuard:
         with (
             patch("claude_monitor.ui.tray_manager.ctypes.windll.kernel32") as kern32,
             patch("claude_monitor.ui.tray_manager.ctypes.windll.user32") as user32,
-            patch("claude_monitor.ui.tray_manager.ctypes.c_ulong") as c_ulong,
-            patch("claude_monitor.ui.tray_manager.ctypes.byref"),
         ):
             kern32.GetConsoleWindow.return_value = fake_hwnd
-            pid_mock = MagicMock()
-            pid_mock.value = os.getpid()
-            c_ulong.return_value = pid_mock
+            kern32.GetConsoleProcessList.return_value = 1
             user32.SetWindowLongPtrW.return_value = fake_original_proc
             user32.CallWindowProcW.return_value = 1
 
