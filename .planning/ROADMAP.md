@@ -32,7 +32,7 @@
 
 - [x] **Phase 7: Code Quality** — Four isolated correctness fixes with no cross-module dependencies — completed 2026-05-20
 - [x] **Phase 8: Burn Rate Accuracy** — Derive $/hr from pool_spend_usd delta over a rolling time window — completed 2026-05-20
-- [ ] **Phase 9: Tray Window Lifecycle** — Window hides on close; tray icon restores it on double-click or menu
+- [~] **Phase 9: Tray Window Lifecycle** — Window hides on close; tray icon restores it on double-click or menu (1/2 plans complete)
 - [ ] **Phase 10: Historical Analytics** — Daily pool spend bar chart rendered inline in the terminal dashboard
 
 ## Phase Details
@@ -64,8 +64,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 08-01-PLAN.md — Add ring buffer state to orchestrator; compute pool_burn_rate_usd_per_hr in _fetch_and_process_data (BURN-01, BURN-02)
-- [ ] 08-02-PLAN.md — Replace inline formula in session_display.py with kwargs read; add test_burn_rate.py (BURN-01, BURN-02)
+- [x] 08-01-PLAN.md — Add ring buffer state to orchestrator; compute pool_burn_rate_usd_per_hr in _fetch_and_process_data (BURN-01, BURN-02)
+- [x] 08-02-PLAN.md — Replace inline formula in session_display.py with kwargs read; add test_burn_rate.py (BURN-01, BURN-02)
 
 ### Phase 9: Tray Window Lifecycle
 **Goal**: Users can close the terminal window to minimize the app to the tray, and restore it from the tray without restarting the process
@@ -79,7 +79,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 09-01-PLAN.md — Add _install_close_guard() with WNDPROC subclassing, PID guard, start()/stop() wiring (TRAY-01, TRAY-03)
+- [x] 09-01-PLAN.md — Add _install_close_guard() with WNDPROC subclassing, PID guard, start()/stop() wiring (TRAY-01, TRAY-03)
 - [ ] 09-02-PLAN.md — Add SetForegroundWindow to _show_console() and _toggle_console(); add TestCloseGuard tests (TRAY-02, TRAY-03, TRAY-04)
 
 ### Phase 10: Historical Analytics
@@ -105,7 +105,7 @@ Plans:
 | 6. Per-Project Breakdown | v2.0 | 4/4 | Complete | 2026-05-19 |
 | 7. Code Quality | v2.1 | 3/3 | Complete | 2026-05-20 |
 | 8. Burn Rate Accuracy | v2.1 | 2/2 | Complete | 2026-05-20 |
-| 9. Tray Window Lifecycle | v2.1 | 0/2 | Not started | - |
+| 9. Tray Window Lifecycle | v2.1 | 1/2 | In progress | - |
 | 10. Historical Analytics | v2.1 | 0/TBD | Not started | - |
 
 Archive: `.planning/milestones/v2.0-ROADMAP.md`
