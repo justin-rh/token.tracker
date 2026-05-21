@@ -96,17 +96,26 @@ class TrayManager:
         # setup callback fires after message loop is ready — safe visible=True
         self._icon.run_detached(setup=lambda icon: setattr(icon, "visible", True))
         logger.info("TrayManager: icon started (run_detached)")
+        self._install_close_guard()   # D-03: install after icon message loop is ready
 
     def stop(self) -> None:
         """Stop the pystray icon cleanly. Safe to call if not started or already stopped.
 
-        icon.stop() posts WM_STOP to the win32 message loop which then calls
-        _hide() (NIM_DELETE) in its finally block — no ghost icon for clean exits.
+        D-08: Restore original WNDPROC before stopping the icon to avoid leaving a
+        dangling hook that could crash the process during cleanup.
 
         Idempotent: a second call (e.g. from _quit() then finally block) is a no-op.
         """
         if self._icon is not None and not self._stopped:
             self._stopped = True
+            # D-08: restore original WNDPROC before icon teardown
+            if self._original_wndproc:
+                hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+                if hwnd:
+                    ctypes.windll.user32.SetWindowLongPtrW(
+                        hwnd, GWLP_WNDPROC, self._original_wndproc
+                    )
+                    logger.info("TrayManager: WNDPROC restored")
             self._icon.stop()
             logger.info("TrayManager: icon stopped")
 
