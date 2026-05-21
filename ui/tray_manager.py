@@ -23,6 +23,20 @@ logger = logging.getLogger(__name__)
 SW_HIDE = 0
 SW_RESTORE = 9
 
+# Windows WNDPROC subclassing constants
+WM_CLOSE = 0x0010
+GWLP_WNDPROC = -4
+SW_SHOW = 5
+
+# WNDPROC callback type: (hwnd, msg, wParam, lParam) -> LRESULT
+WNDPROC = ctypes.WINFUNCTYPE(
+    ctypes.c_long,       # return type: LRESULT
+    ctypes.c_void_p,     # hwnd
+    ctypes.c_uint,       # msg
+    ctypes.c_size_t,     # wParam
+    ctypes.c_size_t,     # lParam
+)
+
 # Utilization color thresholds (per TRAY-01 and STATE.md)
 _COLOR_GREEN  = (34, 197, 94)   # <50% utilization
 _COLOR_YELLOW = (234, 179, 8)   # 50–75% utilization
@@ -53,6 +67,8 @@ class TrayManager:
         self._icon: Optional[pystray.Icon] = None
         self._lock = threading.Lock()
         self._stopped = False
+        self._wndproc_cb: Optional[ctypes.WINFUNCTYPE] = None   # prevents GC of callback
+        self._original_wndproc: int = 0                          # restored in stop()
 
     def start(self) -> None:
         """Create pystray Icon and call run_detached().
@@ -140,7 +156,7 @@ class TrayManager:
         Max observed length: ~50 chars — well within limit.
         """
         util_str = f"{utilization_pct:.1f}%" if utilization_pct is not None else "--"
-        sync_str = last_sync.strftime("%H:%M:%S") if last_sync is not None else "never"
+        sync_str = last_sync.astimezone().strftime("%H:%M:%S") if last_sync is not None else "never"
         return f"Token Tracker  {util_str}  |  Last sync: {sync_str}"
 
     def _toggle_console(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
@@ -162,6 +178,57 @@ class TrayManager:
         hwnd = ctypes.windll.kernel32.GetConsoleWindow()
         if hwnd:
             ctypes.windll.user32.ShowWindow(hwnd, SW_RESTORE)
+
+    def _install_close_guard(self) -> None:
+        """Subclass the console WNDPROC to intercept WM_CLOSE (D-01 through D-04).
+
+        When WM_CLOSE is received:
+          - Calls ShowWindow(hwnd, SW_HIDE) to minimize to tray
+          - Returns 0 — does NOT call DefWindowProc (which would destroy the window)
+
+        PID guard (D-04): if the console window is owned by the shell (PowerShell/cmd
+        launched this process), skip subclassing and log INFO. The X button will close
+        the shell normally in that case.
+
+        Stores self._wndproc_cb (prevents CPython GC of the ctypes callback) and
+        self._original_wndproc (restored in stop()).
+        """
+        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        if not hwnd:
+            logger.info("TrayManager: no console window — close guard skipped")
+            return
+
+        # D-04: verify this process owns the console window
+        pid = ctypes.c_ulong()
+        ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        owns_console = (pid.value == os.getpid())
+        if not owns_console:
+            logger.info(
+                "TrayManager: console window owned by shell (pid=%d, ours=%d) "
+                "— close guard skipped",
+                pid.value,
+                os.getpid(),
+            )
+            return
+
+        # D-02: define callback — must be stored as instance attr to prevent GC
+        def _wndproc(hwnd: int, msg: int, wparam: int, lparam: int) -> int:
+            if msg == WM_CLOSE:
+                # D-01 / D-07: hide to tray silently; do NOT call DefWindowProc
+                ctypes.windll.user32.ShowWindow(hwnd, SW_HIDE)
+                return 0
+            # All other messages: forward to original window procedure
+            return ctypes.windll.user32.CallWindowProcW(
+                self._original_wndproc, hwnd, msg, wparam, lparam
+            )
+
+        self._wndproc_cb = WNDPROC(_wndproc)
+
+        # D-01: subclass the window procedure; save original for restore
+        self._original_wndproc = ctypes.windll.user32.SetWindowLongPtrW(
+            hwnd, GWLP_WNDPROC, self._wndproc_cb
+        )
+        logger.info("TrayManager: WM_CLOSE guard installed (hwnd=0x%x)", hwnd)
 
     def _quit(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         """Trigger clean shutdown identical to Ctrl+C (TRAY-03 Quit).
