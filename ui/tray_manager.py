@@ -171,8 +171,8 @@ class TrayManager:
     def _toggle_console(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         """Toggle terminal window visible/minimized (TRAY-04).
 
-        Uses ctypes GetConsoleWindow + IsWindowVisible + ShowWindow.
-        Only affects the current process's console window — not system windows.
+        D-05/D-06: when restoring, calls SetForegroundWindow after ShowWindow
+        so the window comes to front. When hiding, no foreground change needed.
         """
         hwnd = ctypes.windll.kernel32.GetConsoleWindow()
         if not hwnd:
@@ -181,12 +181,18 @@ class TrayManager:
             ctypes.windll.user32.ShowWindow(hwnd, SW_HIDE)
         else:
             ctypes.windll.user32.ShowWindow(hwnd, SW_RESTORE)
+            ctypes.windll.user32.SetForegroundWindow(hwnd)
 
     def _show_console(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
-        """Show/restore the terminal window (TRAY-03 Open Dashboard)."""
+        """Show/restore the terminal window (TRAY-04 Open Dashboard).
+
+        D-05/D-06: calls SetForegroundWindow after ShowWindow so the window
+        comes to front when restored from tray. User clicked intentionally.
+        """
         hwnd = ctypes.windll.kernel32.GetConsoleWindow()
         if hwnd:
             ctypes.windll.user32.ShowWindow(hwnd, SW_RESTORE)
+            ctypes.windll.user32.SetForegroundWindow(hwnd)
 
     def _install_close_guard(self) -> None:
         """Subclass the console WNDPROC to intercept WM_CLOSE (D-01 through D-04).
