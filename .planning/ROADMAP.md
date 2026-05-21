@@ -76,8 +76,11 @@ Plans:
   2. Double-clicking the tray icon brings the hidden window back to the foreground
   3. The tray icon tooltip continues updating with current utilization % while the window is hidden
   4. Selecting "Open Dashboard" from the tray right-click menu restores a hidden window to the foreground
-**Plans**: TBD
-**UI hint**: yes
+**Plans**: 2 plans
+
+Plans:
+- [ ] 09-01-PLAN.md — Add _install_close_guard() with WNDPROC subclassing, PID guard, start()/stop() wiring (TRAY-01, TRAY-03)
+- [ ] 09-02-PLAN.md — Add SetForegroundWindow to _show_console() and _toggle_console(); add TestCloseGuard tests (TRAY-02, TRAY-03, TRAY-04)
 
 ### Phase 10: Historical Analytics
 **Goal**: Users can see how pool spend has trended day-by-day across the current billing cycle without leaving the terminal dashboard
@@ -102,7 +105,7 @@ Plans:
 | 6. Per-Project Breakdown | v2.0 | 4/4 | Complete | 2026-05-19 |
 | 7. Code Quality | v2.1 | 3/3 | Complete | 2026-05-20 |
 | 8. Burn Rate Accuracy | v2.1 | 2/2 | Complete | 2026-05-20 |
-| 9. Tray Window Lifecycle | v2.1 | 0/TBD | Not started | - |
+| 9. Tray Window Lifecycle | v2.1 | 0/2 | Not started | - |
 | 10. Historical Analytics | v2.1 | 0/TBD | Not started | - |
 
 Archive: `.planning/milestones/v2.0-ROADMAP.md`
