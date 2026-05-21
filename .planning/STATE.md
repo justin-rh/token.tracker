@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Polish + Analytics
 status: planning
-stopped_at: "Phase 8 complete — 2/2 plans, verified; next: /gsd-discuss-phase 9"
+stopped_at: "Phase 9 context captured — ready for /gsd-plan-phase 9"
 last_updated: "2026-05-20T00:00:00.000Z"
-last_activity: 2026-05-20 — Phase 8 executed and verified (BURN-01, BURN-02 satisfied, 83 tests pass); next: discuss/plan Phase 9
+last_activity: 2026-05-20 — Phase 9 context gathered (WNDPROC subclassing, PID guard, foreground restore, always-hide); next: /gsd-plan-phase 9
 progress:
   total_phases: 4
   completed_phases: 2
