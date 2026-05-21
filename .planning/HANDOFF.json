@@ -1,0 +1,37 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-05-21T12:50:42",
+  "phase": "09",
+  "phase_name": "tray-window-lifecycle",
+  "phase_dir": ".planning/phases/09-tray-window-lifecycle",
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "paused",
+  "completed_tasks": [
+    {"id": 1, "name": "Diagnose ConPTY / Windows Terminal blocking Win32 APIs", "status": "done"},
+    {"id": 2, "name": "Add auto-detach via conhost.exe in cli/main.py", "status": "done"},
+    {"id": 3, "name": "Replace broken close guard with Hide to Tray tray menu item", "status": "done"},
+    {"id": 4, "name": "Fix SW_HIDE taskbar persistence with exstyle manipulation", "status": "done"},
+    {"id": 5, "name": "Fix conhost color rendering (SetConsoleOutputCP vs TextIOWrapper)", "status": "done"}
+  ],
+  "remaining_tasks": [
+    {"id": 6, "name": "Verify Hide to Tray fully removes from taskbar", "status": "not_started"},
+    {"id": 7, "name": "Verify colors/box-drawing render in conhost", "status": "not_started"},
+    {"id": 8, "name": "Consider re-enabling X-button graying (GetSystemMenu now works on conhost HWND)", "status": "not_started"},
+    {"id": 9, "name": "Commit verified fix", "status": "not_started"},
+    {"id": 10, "name": "Update STATE.md and VERIFICATION.md", "status": "not_started"}
+  ],
+  "blockers": [],
+  "human_actions_pending": [
+    {"action": "Run python monitor.py and verify Hide to Tray + color rendering", "context": "Final changes applied but not yet tested", "blocking": true}
+  ],
+  "decisions": [
+    {"decision": "Use conhost.exe -- python monitor.py for auto-detach", "rationale": "CREATE_NEW_CONSOLE opens Windows Terminal tab on Win11; conhost.exe explicit launch bypasses WT entirely", "phase": "09"},
+    {"decision": "SetConsoleOutputCP(65001) in detached process instead of TextIOWrapper", "rationale": "TextIOWrapper breaks Rich isatty() detection, causing no-color fallback in conhost", "phase": "09"},
+    {"decision": "WS_EX_TOOLWINDOW + SW_HIDE for taskbar removal", "rationale": "SW_HIDE alone leaves taskbar button if WS_EX_APPWINDOW is set", "phase": "09"}
+  ],
+  "uncommitted_files": ["cli/main.py", "monitor.py", "ui/tray_manager.py", ".planning/STATE.md"],
+  "next_action": "Run python monitor.py, verify colors + Hide to Tray fully hides from taskbar, then commit",
+  "context_notes": "Windows Terminal ConPTY blocks GetSystemMenu, CTRL_CLOSE_EVENT veto, and exstyle manipulation. Only conhost.exe explicit launch gives a real Win32 HWND. All three changed files are in a working-but-unverified state."
+}

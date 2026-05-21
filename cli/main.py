@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import signal
+import subprocess
 import sys
 import time
 import traceback
@@ -87,6 +88,42 @@ def main(argv: Optional[List[str]] = None) -> int:
     if "--version" in argv or "-v" in argv:
         print(f"claude-monitor {__version__}")
         return 0
+
+    # Auto-detach to own console so the X-button close guard (CTRL_CLOSE_EVENT
+    # handler in TrayManager) can intercept the close event.
+    #
+    # Two cases require a relaunch with CREATE_NEW_CONSOLE:
+    #   1. hwnd == 0  → running inside Windows Terminal (ConPTY pseudoconsole).
+    #      GetConsoleWindow() always returns NULL under ConPTY; there is no real
+    #      Win32 window to hide.  CREATE_NEW_CONSOLE spawns a classic conhost.exe
+    #      window even when the parent is ConPTY.
+    #   2. hwnd != 0 but GetConsoleProcessList > 1 → shared classic console
+    #      (e.g. cmd.exe or legacy PowerShell host). The parent shell also owns
+    #      the window and will close it regardless of our handler.
+    if sys.platform == "win32" and not os.environ.get("_TOKEN_TRACKER_DETACHED"):
+        import ctypes as _ctypes
+        _hwnd = _ctypes.windll.kernel32.GetConsoleWindow()
+        _need_relaunch = False
+        if not _hwnd:
+            _need_relaunch = True  # ConPTY — no Win32 window
+        else:
+            _buf = (_ctypes.c_ulong * 64)()
+            _count = _ctypes.windll.kernel32.GetConsoleProcessList(_buf, 64)
+            if _count > 1:
+                _need_relaunch = True  # shared classic console
+        if _need_relaunch:
+            _env = {**os.environ, "_TOKEN_TRACKER_DETACHED": "1"}
+            # Launch via conhost.exe explicitly so the new window is a classic
+            # Win32 console (not a Windows Terminal tab).  Windows Terminal
+            # intercepts CREATE_NEW_CONSOLE and hosts the process inside itself,
+            # which breaks GetSystemMenu, SW_HIDE, and exstyle manipulation.
+            # conhost.exe -- <cmd> bypasses that and creates a real HWND.
+            _conhost = r"C:\Windows\System32\conhost.exe"
+            subprocess.Popen(
+                [_conhost, "--", sys.executable] + sys.argv,
+                env=_env,
+            )
+            return 0
 
     try:
         settings = Settings.load_with_last_used(argv)

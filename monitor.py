@@ -10,23 +10,31 @@ Usage:
     python monitor.py --help
 """
 
-# Windows stdout/stderr UTF-8 reconfiguration — MUST come before any Rich imports.
+# Windows UTF-8 + VT reconfiguration — MUST come before any Rich imports.
+import os
 import sys
 
 if sys.platform == "win32":
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
-
-# Also enable Virtual Terminal Processing in cmd.exe so ANSI escape codes render.
-if sys.platform == "win32":
-    import ctypes
+    import ctypes as _ctypes
+    _k32 = _ctypes.windll.kernel32  # type: ignore[attr-defined]
+    if os.environ.get("_TOKEN_TRACKER_DETACHED"):
+        # Running in a detached classic conhost.exe window.  Use the native
+        # UTF-8 code page (CP 65001) so Rich sees a real TTY and renders
+        # colours/box-drawing correctly.  TextIOWrapper wrapping breaks
+        # Rich's isatty() detection in conhost.
+        _k32.SetConsoleOutputCP(65001)
+        _k32.SetConsoleCP(65001)
+    else:
+        # Running inside Windows Terminal (ConPTY) or an initial shell session.
+        # Wrap stdout/stderr with a UTF-8 TextIOWrapper for correct encoding.
+        import io as _io
+        sys.stdout = _io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        sys.stderr = _io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+    # Enable ENABLE_VIRTUAL_TERMINAL_PROCESSING for ANSI escape codes.
     try:
-        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
-        # Enable ENABLE_VIRTUAL_TERMINAL_PROCESSING (0x0004) on STDOUT (-11)
-        kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
+        _k32.SetConsoleMode(_k32.GetStdHandle(-11), 7)
     except Exception:
-        pass  # Not available in some terminal emulators; ignore silently.
+        pass
 
 # Ensure the repo root is on sys.path before importing flat modules.
 import os

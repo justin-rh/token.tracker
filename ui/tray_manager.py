@@ -14,20 +14,19 @@ import threading
 from datetime import datetime
 from typing import Callable, Optional, Tuple
 
+
 import pystray
 from PIL import Image, ImageDraw
 
 logger = logging.getLogger(__name__)
 
-# Windows ShowWindow constants
+# Windows ShowWindow / GetAncestor / extended-style constants
 SW_HIDE = 0
 SW_RESTORE = 9
-
-# SetConsoleCtrlHandler event types
-CTRL_CLOSE_EVENT = 2
-
-# Callback type for SetConsoleCtrlHandler: (dwCtrlType: DWORD) -> BOOL
-_HandlerRoutine = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_ulong)
+GA_ROOT = 2
+GWL_EXSTYLE = -20
+WS_EX_APPWINDOW = 0x00040000   # forces taskbar button — must be cleared to hide
+WS_EX_TOOLWINDOW = 0x00000080  # omits window from taskbar/Alt-Tab
 
 # Utilization color thresholds (per TRAY-01 and STATE.md)
 _COLOR_GREEN  = (34, 197, 94)   # <50% utilization
@@ -59,7 +58,7 @@ class TrayManager:
         self._icon: Optional[pystray.Icon] = None
         self._lock = threading.Lock()
         self._stopped = False
-        self._ctrl_handler_cb: Optional[ctypes.WINFUNCTYPE] = None  # prevents GC of callback
+        self._saved_exstyle: Optional[int] = None  # original exstyle before hide
 
     def start(self) -> None:
         """Create pystray Icon and call run_detached().
@@ -72,8 +71,9 @@ class TrayManager:
                 "Toggle Dashboard",
                 self._toggle_console,
                 default=True,   # left-click activates this item (TRAY-04)
-                visible=False,  # hidden from right-click menu (Pitfall 6)
+                visible=False,  # hidden from right-click menu — left-click only
             ),
+            pystray.MenuItem("Hide to Tray", self._hide_console),
             pystray.MenuItem("Open Dashboard", self._show_console),
             pystray.MenuItem("Quit", self._quit),
         )
@@ -87,7 +87,6 @@ class TrayManager:
         # setup callback fires after message loop is ready — safe visible=True
         self._icon.run_detached(setup=lambda icon: setattr(icon, "visible", True))
         logger.info("TrayManager: icon started (run_detached)")
-        self._install_close_guard()   # D-03: install after icon message loop is ready
 
     def stop(self) -> None:
         """Stop the pystray icon cleanly. Safe to call if not started or already stopped.
@@ -96,12 +95,6 @@ class TrayManager:
         """
         if self._icon is not None and not self._stopped:
             self._stopped = True
-            if self._ctrl_handler_cb is not None:
-                ctypes.windll.kernel32.SetConsoleCtrlHandler(
-                    self._ctrl_handler_cb, False
-                )
-                self._ctrl_handler_cb = None
-                logger.info("TrayManager: CTRL_CLOSE_EVENT handler removed")
             self._icon.stop()
             logger.info("TrayManager: icon stopped")
 
@@ -154,74 +147,58 @@ class TrayManager:
         sync_str = last_sync.astimezone().strftime("%H:%M:%S") if last_sync is not None else "never"
         return f"Token Tracker  {util_str}  |  Last sync: {sync_str}"
 
-    def _toggle_console(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
-        """Toggle terminal window visible/minimized (TRAY-04).
+    @staticmethod
+    def _top_hwnd() -> int:
+        """Return the top-level window HWND for the console.
 
-        D-05/D-06: when restoring, calls SetForegroundWindow after ShowWindow
-        so the window comes to front. When hiding, no foreground change needed.
+        GetConsoleWindow() may return a child/embedded window inside Windows
+        Terminal. GetAncestor(GA_ROOT) walks to the outermost ancestor so that
+        ShowWindow(SW_HIDE) removes the entry from the taskbar entirely rather
+        than just collapsing a pane.
         """
         hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        if not hwnd:
+            return 0
+        root = ctypes.windll.user32.GetAncestor(hwnd, GA_ROOT)
+        return root if root else hwnd
+
+    def _toggle_console(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
+        """Toggle terminal window visible/hidden (left-click tray action)."""
+        hwnd = self._top_hwnd()
         if not hwnd:
             return
         if ctypes.windll.user32.IsWindowVisible(hwnd):
-            ctypes.windll.user32.ShowWindow(hwnd, SW_HIDE)
+            self._do_hide(hwnd)
         else:
-            ctypes.windll.user32.ShowWindow(hwnd, SW_RESTORE)
-            ctypes.windll.user32.SetForegroundWindow(hwnd)
+            self._do_show(hwnd)
+
+    def _hide_console(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
+        """Hide the terminal window to the tray (right-click menu action)."""
+        hwnd = self._top_hwnd()
+        if hwnd:
+            self._do_hide(hwnd)
 
     def _show_console(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
-        """Show/restore the terminal window (TRAY-04 Open Dashboard).
-
-        D-05/D-06: calls SetForegroundWindow after ShowWindow so the window
-        comes to front when restored from tray. User clicked intentionally.
-        """
-        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        """Show/restore the terminal window (right-click Open Dashboard)."""
+        hwnd = self._top_hwnd()
         if hwnd:
-            ctypes.windll.user32.ShowWindow(hwnd, SW_RESTORE)
-            ctypes.windll.user32.SetForegroundWindow(hwnd)
+            self._do_show(hwnd)
 
-    def _install_close_guard(self) -> None:
-        """Register a CTRL_CLOSE_EVENT handler so the X button hides to tray.
+    def _do_hide(self, hwnd: int) -> None:
+        """Remove window from taskbar and hide it."""
+        exstyle = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+        self._saved_exstyle = exstyle
+        new_style = (exstyle & ~WS_EX_APPWINDOW) | WS_EX_TOOLWINDOW
+        ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, new_style)
+        ctypes.windll.user32.ShowWindow(hwnd, SW_HIDE)
 
-        Uses SetConsoleCtrlHandler (in-process API) rather than WNDPROC subclassing.
-        WNDPROC subclassing via SetWindowLongPtrW requires the target window to belong
-        to the same process — the console window belongs to conhost.exe, so it fails.
-
-        Only installed when this process is the sole owner of the console (count==1).
-        When running inside an existing shell (count>1), the guard is skipped so the
-        shell's X button behaves normally.
-        """
-        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
-        if not hwnd:
-            logger.info("TrayManager: no console window — close guard skipped")
-            return
-
-        proc_buf = (ctypes.c_ulong * 64)()
-        console_proc_count = ctypes.windll.kernel32.GetConsoleProcessList(
-            proc_buf, 64
-        )
-        if console_proc_count != 1:
-            logger.info(
-                "TrayManager: console shared with %d other process(es) "
-                "— close guard skipped",
-                console_proc_count - 1,
-            )
-            return
-
-        def _ctrl_handler(ctrl_type: int) -> bool:
-            if ctrl_type == CTRL_CLOSE_EVENT:
-                ctypes.windll.user32.ShowWindow(hwnd, SW_HIDE)
-                return True  # handled — suppress default termination
-            return False
-
-        self._ctrl_handler_cb = _HandlerRoutine(_ctrl_handler)
-        result = ctypes.windll.kernel32.SetConsoleCtrlHandler(
-            self._ctrl_handler_cb, True
-        )
-        if result:
-            logger.info("TrayManager: CTRL_CLOSE_EVENT handler installed")
-        else:
-            logger.warning("TrayManager: SetConsoleCtrlHandler failed")
+    def _do_show(self, hwnd: int) -> None:
+        """Restore window to taskbar and bring it to front."""
+        if self._saved_exstyle is not None:
+            ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, self._saved_exstyle)
+            self._saved_exstyle = None
+        ctypes.windll.user32.ShowWindow(hwnd, SW_RESTORE)
+        ctypes.windll.user32.SetForegroundWindow(hwnd)
 
     def _quit(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         """Trigger clean shutdown identical to Ctrl+C (TRAY-03 Quit).
