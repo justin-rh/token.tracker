@@ -28,6 +28,12 @@ GWL_EXSTYLE = -20
 WS_EX_APPWINDOW = 0x00040000   # forces taskbar button — must be cleared to hide
 WS_EX_TOOLWINDOW = 0x00000080  # omits window from taskbar/Alt-Tab
 
+# SetConsoleCtrlHandler constants
+CTRL_CLOSE_EVENT = 2  # fired when the user clicks the console's X button
+
+# Callback type for SetConsoleCtrlHandler: BOOL WINAPI HandlerRoutine(DWORD dwCtrlType)
+_HandlerRoutine = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_ulong)
+
 # Utilization color thresholds
 _COLOR_LIGHT_GREEN = (134, 239, 172)  # <25%
 _COLOR_GREEN       = (34,  197, 94)   # 25–50%
@@ -84,6 +90,7 @@ class TrayManager:
         self._lock = threading.Lock()
         self._stopped = False
         self._saved_exstyle: Optional[int] = None  # original exstyle before hide
+        self._ctrl_handler_cb = None  # prevents GC of SetConsoleCtrlHandler callback
 
     def start(self) -> None:
         """Create pystray Icon and call run_detached().
@@ -210,6 +217,39 @@ class TrayManager:
             return 0
         root = ctypes.windll.user32.GetAncestor(hwnd, GA_ROOT)
         return root if root else hwnd
+
+    def _install_close_guard(self) -> None:
+        """Register a SetConsoleCtrlHandler callback that hides on CTRL_CLOSE_EVENT.
+
+        Guard logic:
+          - No console window (hwnd=0): skip silently.
+          - Console shared with a parent shell (GetConsoleProcessList > 1): skip,
+            log INFO — the X button should close the shell normally in that case.
+          - Sole owner (count==1): install the handler and store the callback in
+            self._ctrl_handler_cb to prevent CPython from GC-ing the ctypes object.
+        """
+        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        if not hwnd:
+            logger.info("TrayManager: no console window — close guard skipped")
+            return
+
+        buf = (ctypes.c_ulong * 2)()
+        count = ctypes.windll.kernel32.GetConsoleProcessList(buf, 2)
+        if count != 1:
+            logger.info(
+                "TrayManager: console shared (count=%d) — close guard skipped", count
+            )
+            return
+
+        def _handler(event: int) -> bool:
+            if event == CTRL_CLOSE_EVENT:
+                ctypes.windll.user32.ShowWindow(hwnd, SW_HIDE)
+                return True
+            return False
+
+        self._ctrl_handler_cb = _HandlerRoutine(_handler)
+        ctypes.windll.kernel32.SetConsoleCtrlHandler(self._ctrl_handler_cb, True)
+        logger.info("TrayManager: CTRL_CLOSE_EVENT guard installed")
 
     def _toggle_console(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         """Toggle terminal window visible/hidden (left-click tray action)."""

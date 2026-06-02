@@ -89,7 +89,7 @@ def test_included_session_excluded_from_spend(tmp_path):
 def test_overage_session_counted_in_spend(tmp_path):
     """totalTokens=100_000 > threshold=88_000 → OVERAGE → pool_spend_usd=1.50."""
     blocks = [make_block(tokens=100_000, cost=1.50)]
-    result = compute_pool_state(blocks, KNOWN_STATE, config_dir=tmp_path)
+    result = compute_pool_state(blocks, KNOWN_STATE, config_dir=tmp_path, today=date(2026, 5, 8))
 
     assert result.pool_spend_usd == pytest.approx(1.50)
 
@@ -105,7 +105,7 @@ def test_multiple_overage_sessions_summed(tmp_path):
         make_block(tokens=200_000, cost=2.0),   # OVERAGE
         make_block(tokens=50_000, cost=0.50),   # INCLUDED
     ]
-    result = compute_pool_state(blocks, KNOWN_STATE, config_dir=tmp_path)
+    result = compute_pool_state(blocks, KNOWN_STATE, config_dir=tmp_path, today=date(2026, 5, 8))
 
     assert result.pool_spend_usd == pytest.approx(3.0)
 
@@ -117,7 +117,7 @@ def test_multiple_overage_sessions_summed(tmp_path):
 def test_active_block_included(tmp_path):
     """Active block with OVERAGE token count → pool_spend_usd includes cost (real-time)."""
     blocks = [make_block(active=True, tokens=100_000, cost=1.50)]
-    result = compute_pool_state(blocks, KNOWN_STATE, config_dir=tmp_path)
+    result = compute_pool_state(blocks, KNOWN_STATE, config_dir=tmp_path, today=date(2026, 5, 8))
 
     assert result.pool_spend_usd == pytest.approx(1.50)
 
@@ -267,7 +267,7 @@ def test_pool_pct_spent_calculation(tmp_path):
 
     # Create OVERAGE blocks summing to exactly 100.0
     blocks = [make_block(tokens=100_000, cost=100.0)]
-    result = compute_pool_state(blocks, KNOWN_STATE, config_dir=tmp_path)
+    result = compute_pool_state(blocks, KNOWN_STATE, config_dir=tmp_path, today=date(2026, 5, 8))
 
     assert result.pool_spend_usd == pytest.approx(100.0)
     assert result.pool_size_usd == pytest.approx(500.0)
