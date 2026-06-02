@@ -8,6 +8,7 @@ import os
 import signal
 import subprocess
 import sys
+import threading
 import time
 import traceback
 from pathlib import Path
@@ -155,13 +156,20 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 1
 
 
-def _tray_shutdown() -> None:
-    """Trigger clean shutdown from pystray thread (identical to Ctrl+C).
+# Set by _tray_shutdown(); the main loop blocks on this instead of sleeping.
+# threading.Event.wait() is interrupted by KeyboardInterrupt (Ctrl+C) and
+# returns normally when set() is called from the tray Quit action.
+_shutdown_event = threading.Event()
 
-    Per RESEARCH.md Pitfall 2-3: use CTRL_C_EVENT not SIGINT on Windows.
-    signal is already imported at the top of this module.
+
+def _tray_shutdown() -> None:
+    """Signal the main thread to exit cleanly (called from pystray Quit menu item).
+
+    Sets _shutdown_event so the main loop unblocks and falls through to the
+    finally block for clean teardown. Does not use CTRL_C_EVENT or signals —
+    those are unreliable in detached conhost.exe windows.
     """
-    os.kill(os.getpid(), signal.CTRL_C_EVENT)
+    _shutdown_event.set()
 
 
 def _run_monitoring(args: argparse.Namespace) -> None:
@@ -318,14 +326,15 @@ def _run_monitoring(args: argparse.Namespace) -> None:
             if not orchestrator.wait_for_initial_data(timeout=10.0):
                 logger.warning("Timeout waiting for initial data")
 
-            # Main loop - live display is already active
-            # Use signal.pause() for more efficient waiting
+            # Block until tray Quit sets _shutdown_event or Ctrl+C raises KeyboardInterrupt.
+            # _shutdown_event.wait() releases cleanly on both paths:
+            #   - Quit menu: _tray_shutdown() calls _shutdown_event.set() → wait() returns True
+            #   - Ctrl+C: KeyboardInterrupt is raised inside wait() → propagates to outer except
+            # signal.pause() is the preferred approach on POSIX but raises OSError on Windows.
             try:
                 signal.pause()
             except (AttributeError, OSError):
-                # Fallback for Windows: signal.pause() raises OSError on Windows
-                while True:
-                    time.sleep(1)
+                _shutdown_event.wait()
         finally:
             # Stop monitoring first
             if "orchestrator" in locals():

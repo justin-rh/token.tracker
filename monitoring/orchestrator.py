@@ -159,24 +159,27 @@ class MonitoringOrchestrator:
         self._fetch_and_process_data()
 
         while self._monitoring:
-            # Choose interval based on window visibility
             visible = self._visibility_check() if self._visibility_check else True
-            interval = self.update_interval if visible else self.background_interval
 
-            # Sleep in 1-second slices so we can react quickly when the window
-            # is restored — breaks early and triggers an immediate refresh.
-            slept = 0
-            was_hidden = not visible
-            while slept < interval and self._monitoring:
-                if self._stop_event.wait(timeout=1.0):
+            if visible:
+                # Window visible: single wait — no extra thread wakeups that
+                # would contend with Rich's auto-refresh and cause display flicker.
+                if self._stop_event.wait(timeout=self.update_interval):
+                    if not self._monitoring:
+                        break
+            else:
+                # Window hidden: 1-second ticks so restore is detected quickly
+                # and triggers an immediate refresh when the user brings it back.
+                slept = 0
+                while slept < self.background_interval and self._monitoring:
+                    if self._stop_event.wait(timeout=1.0):
+                        break
+                    slept += 1
+                    if self._visibility_check and self._visibility_check():
+                        logger.debug("Window restored — triggering immediate refresh")
+                        break
+                if not self._monitoring:
                     break
-                slept += 1
-                if was_hidden and self._visibility_check and self._visibility_check():
-                    logger.debug("Window restored — triggering immediate refresh")
-                    break
-
-            if not self._monitoring:
-                break
 
             self._fetch_and_process_data()
 

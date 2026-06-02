@@ -91,6 +91,7 @@ class TrayManager:
         self._stopped = False
         self._saved_exstyle: Optional[int] = None  # original exstyle before hide
         self._ctrl_handler_cb = None  # prevents GC of SetConsoleCtrlHandler callback
+        self._console_hidden: bool = False  # set by _do_hide/_do_show; avoids polling IsWindowVisible
 
     def start(self) -> None:
         """Create pystray Icon and call run_detached().
@@ -197,11 +198,13 @@ class TrayManager:
         return f"Token Tracker  {util_str}  |  Last sync: {sync_str}"
 
     def is_console_visible(self) -> bool:
-        """Return True when the console window is currently visible to the user."""
-        hwnd = self._top_hwnd()
-        if not hwnd:
-            return True  # no console handle — assume visible (safe default)
-        return bool(ctypes.windll.user32.IsWindowVisible(hwnd))
+        """Return True when the console window is visible to the user.
+
+        Reads a flag set by _do_hide/_do_show rather than calling IsWindowVisible
+        on every monitoring cycle — Win32 polls are unreliable in Windows Terminal
+        (the call can return False intermittently, causing display flicker).
+        """
+        return not self._console_hidden
 
     @staticmethod
     def _top_hwnd() -> int:
@@ -280,6 +283,7 @@ class TrayManager:
         new_style = (exstyle & ~WS_EX_APPWINDOW) | WS_EX_TOOLWINDOW
         ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, new_style)
         ctypes.windll.user32.ShowWindow(hwnd, SW_HIDE)
+        self._console_hidden = True
 
     def _do_show(self, hwnd: int) -> None:
         """Restore window to taskbar and bring it to front."""
@@ -288,6 +292,7 @@ class TrayManager:
             self._saved_exstyle = None
         ctypes.windll.user32.ShowWindow(hwnd, SW_RESTORE)
         ctypes.windll.user32.SetForegroundWindow(hwnd)
+        self._console_hidden = False
 
     def _quit(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         """Trigger clean shutdown identical to Ctrl+C (TRAY-03 Quit).
@@ -299,13 +304,7 @@ class TrayManager:
         Fallback: if CTRL_C_EVENT raises OSError, calls shutdown_callback directly.
         """
         icon.stop()
-        try:
-            os.kill(os.getpid(), signal.CTRL_C_EVENT)
-        except OSError:
-            logger.warning(
-                "TrayManager: CTRL_C_EVENT failed — using shutdown_callback fallback"
-            )
-            self._shutdown_callback()
+        self._shutdown_callback()
 
 
 def _utilization_to_color(pct: float) -> Tuple[int, int, int]:
