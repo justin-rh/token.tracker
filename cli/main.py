@@ -210,8 +210,11 @@ def _run_monitoring(args: argparse.Namespace) -> None:
         )
         logger.info(f"Data refresh rate: {args.refresh_rate} seconds")
 
+        # auto_refresh=False: the display only redraws when the monitoring cycle
+        # delivers new data (every 10 s). Continuous auto-refresh at 0.75 Hz caused
+        # a clear-then-redraw flash every ~1.3 s even when nothing changed.
         live_display = display_controller.live_manager.create_live_display(
-            auto_refresh=True, console=console, refresh_per_second=refresh_per_second
+            auto_refresh=False, console=console
         )
 
         loading_display = display_controller.create_loading_display(
@@ -230,7 +233,7 @@ def _run_monitoring(args: argparse.Namespace) -> None:
             # Enter live context and show loading screen immediately
             live_display.__enter__()
             live_display_active = True
-            live_display.update(loading_display)
+            live_display.update(loading_display, refresh=True)
 
             orchestrator = MonitoringOrchestrator(
                 update_interval=(
@@ -285,7 +288,7 @@ def _run_monitoring(args: argparse.Namespace) -> None:
                         )
 
                         if live_display:
-                            live_display.update(renderable)
+                            live_display.update(renderable, refresh=True)
 
                     # Phase 5: Update tray icon color and tooltip (TRAY-01, TRAY-02)
                     web_usage = monitoring_data.get("web_usage")
