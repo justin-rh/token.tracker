@@ -26,10 +26,11 @@ class MonitoringOrchestrator:
         """Initialize orchestrator with components.
 
         Args:
-            update_interval: Seconds between updates
+            update_interval: Seconds between updates when the window is visible.
             data_path: Optional path to Claude data directory
         """
         self.update_interval: int = update_interval
+        self.background_interval: int = 60  # seconds between updates when window is hidden
 
         self.data_manager: DataManager = DataManager(cache_ttl=5, hours_back=720, data_path=data_path)
         self.session_monitor: SessionMonitor = SessionMonitor()
@@ -42,6 +43,7 @@ class MonitoringOrchestrator:
         self._args: Optional[Any] = None
         self._web_poller: Optional[Any] = None  # Phase 4: WebPoller instance (Any avoids circular import)
         self._first_data_event: threading.Event = threading.Event()
+        self._visibility_check: Optional[Callable[[], bool]] = None  # returns True when window is visible
 
         # Phase 8: rolling ring buffer for pool burn rate computation (D-01..D-06, 08-CONTEXT.md)
         self._burn_rate_buffer: collections.deque = collections.deque()  # stores (timestamp: float, pool_spend_usd: float) tuples
@@ -86,6 +88,15 @@ class MonitoringOrchestrator:
             args: Command line arguments
         """
         self._args = args
+
+    def set_visibility_check(self, check: Callable[[], bool]) -> None:
+        """Register a callable that returns True when the console window is visible.
+
+        When the window is hidden the monitoring loop sleeps for background_interval
+        (default 60 s) instead of update_interval (default 10 s). The loop wakes
+        within 1 s of the window being restored so the display refreshes immediately.
+        """
+        self._visibility_check = check
 
     def set_web_poller(self, poller: Any) -> None:
         """Register the WebPoller instance for web usage data retrieval.
@@ -148,12 +159,25 @@ class MonitoringOrchestrator:
         self._fetch_and_process_data()
 
         while self._monitoring:
-            # Wait for interval or stop
-            if self._stop_event.wait(timeout=self.update_interval):
-                if not self._monitoring:
+            # Choose interval based on window visibility
+            visible = self._visibility_check() if self._visibility_check else True
+            interval = self.update_interval if visible else self.background_interval
+
+            # Sleep in 1-second slices so we can react quickly when the window
+            # is restored — breaks early and triggers an immediate refresh.
+            slept = 0
+            was_hidden = not visible
+            while slept < interval and self._monitoring:
+                if self._stop_event.wait(timeout=1.0):
+                    break
+                slept += 1
+                if was_hidden and self._visibility_check and self._visibility_check():
+                    logger.debug("Window restored — triggering immediate refresh")
                     break
 
-            # Fetch and process
+            if not self._monitoring:
+                break
+
             self._fetch_and_process_data()
 
         logger.info("Monitoring loop ended")

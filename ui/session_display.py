@@ -351,10 +351,18 @@ class SessionDisplayComponent:
                 )
 
                 # Pool % remaining progress bar (D-14, OVGE-03)
-                # CRITICAL: pass pool_pct_SPENT (not remaining) so color escalates as pool depletes.
-                # _render_wide_progress_bar: green < 50%, yellow < 80%, red >= 80% of value passed.
-                pool_bar = self._render_wide_progress_bar(pool_state.pool_pct_spent)
-                pct_remaining = 100.0 - pool_state.pool_pct_spent
+                # Web values win when present (STATE.md decision): use web_usage.utilization_pct
+                # for the bar and remaining-% so the dashboard matches the tray icon tooltip,
+                # both sourced from Anthropic's authoritative billing API.
+                # Falls back to locally-computed pool_pct_spent when web data is unavailable.
+                web_usage = kwargs.get("web_usage")
+                pool_pct_for_bar = (
+                    web_usage.utilization_pct
+                    if web_usage is not None
+                    else pool_state.pool_pct_spent
+                )
+                pool_bar = self._render_wide_progress_bar(pool_pct_for_bar)
+                pct_remaining = 100.0 - pool_pct_for_bar
                 screen_buffer.append(
                     f"   {pool_bar} {pct_remaining:.1f}% remaining"
                 )

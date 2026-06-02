@@ -242,6 +242,7 @@ def _run_monitoring(args: argparse.Namespace) -> None:
             # Phase 5: Start system tray icon (TRAY-01 through TRAY-05)
             tray_manager = TrayManager(shutdown_callback=_tray_shutdown)
             tray_manager.start()
+            orchestrator.set_visibility_check(tray_manager.is_console_visible)
 
             # Setup monitoring callback
             def on_data_update(monitoring_data: Dict[str, Any]) -> None:
@@ -260,20 +261,23 @@ def _run_monitoring(args: argparse.Namespace) -> None:
                             total_tokens: int = active_blocks[0].get("totalTokens", 0)
                             logger.debug(f"Active block tokens: {total_tokens}")
 
-                    renderable = display_controller.create_data_display(
-                        data,
-                        args,
-                        monitoring_data.get("token_limit", token_limit),
-                        threshold_state=monitoring_data.get("threshold_state"),
-                        pool_state=monitoring_data.get("pool_state"),                    # Phase 3 NEW
-                        web_usage=monitoring_data.get("web_usage"),                      # Phase 4 NEW
-                        last_web_sync=monitoring_data.get("last_web_sync"),              # Phase 4 NEW
-                        project_breakdown=monitoring_data.get("project_breakdown"),      # Phase 6 NEW
-                        pool_burn_rate_usd_per_hr=monitoring_data.get("pool_burn_rate_usd_per_hr"),  # Phase 8 NEW
-                    )
+                    # Skip expensive rendering when the console window is hidden.
+                    # The tray icon update below still runs unconditionally.
+                    if tray_manager is None or tray_manager.is_console_visible():
+                        renderable = display_controller.create_data_display(
+                            data,
+                            args,
+                            monitoring_data.get("token_limit", token_limit),
+                            threshold_state=monitoring_data.get("threshold_state"),
+                            pool_state=monitoring_data.get("pool_state"),                    # Phase 3 NEW
+                            web_usage=monitoring_data.get("web_usage"),                      # Phase 4 NEW
+                            last_web_sync=monitoring_data.get("last_web_sync"),              # Phase 4 NEW
+                            project_breakdown=monitoring_data.get("project_breakdown"),      # Phase 6 NEW
+                            pool_burn_rate_usd_per_hr=monitoring_data.get("pool_burn_rate_usd_per_hr"),  # Phase 8 NEW
+                        )
 
-                    if live_display:
-                        live_display.update(renderable)
+                        if live_display:
+                            live_display.update(renderable)
 
                     # Phase 5: Update tray icon color and tooltip (TRAY-01, TRAY-02)
                     web_usage = monitoring_data.get("web_usage")

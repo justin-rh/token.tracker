@@ -16,7 +16,7 @@ from typing import Callable, Optional, Tuple
 
 
 import pystray
-from PIL import Image, ImageDraw
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +28,35 @@ GWL_EXSTYLE = -20
 WS_EX_APPWINDOW = 0x00040000   # forces taskbar button — must be cleared to hide
 WS_EX_TOOLWINDOW = 0x00000080  # omits window from taskbar/Alt-Tab
 
-# Utilization color thresholds (per TRAY-01 and STATE.md)
-_COLOR_GREEN  = (34, 197, 94)   # <50% utilization
-_COLOR_YELLOW = (234, 179, 8)   # 50–75% utilization
-_COLOR_RED    = (239, 68, 68)   # >=75% utilization
+# Utilization color thresholds
+_COLOR_LIGHT_GREEN = (134, 239, 172)  # <25%
+_COLOR_GREEN       = (34,  197, 94)   # 25–50%
+_COLOR_YELLOW      = (234, 179, 8)    # 50–75%
+_COLOR_ORANGE      = (249, 115, 22)   # 75–90%
+_COLOR_RED         = (239, 68,  68)   # >=90%
+
+# 8-bit coin pixel art — 16×16 logical pixels, rendered at 4× scale (64×64 output).
+# T=transparent, O=dark outline, H=highlight, M=main fill, S=shadow
+_T, _O, _H, _M, _S = 0, 1, 2, 3, 4
+_COIN = [
+    #  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15
+    [_T, _T, _T, _T, _T, _T, _T, _T, _T, _T, _T, _T, _T, _T, _T, _T],  # 0
+    [_T, _T, _T, _T, _T, _O, _O, _O, _O, _O, _T, _T, _T, _T, _T, _T],  # 1
+    [_T, _T, _T, _O, _O, _H, _H, _M, _M, _M, _O, _O, _T, _T, _T, _T],  # 2
+    [_T, _T, _O, _H, _H, _H, _M, _M, _M, _M, _M, _M, _O, _T, _T, _T],  # 3
+    [_T, _O, _M, _H, _H, _M, _M, _M, _M, _M, _M, _M, _M, _O, _T, _T],  # 4
+    [_T, _O, _M, _H, _M, _M, _M, _M, _M, _M, _M, _M, _M, _O, _T, _T],  # 5
+    [_O, _M, _M, _M, _M, _M, _M, _M, _M, _M, _M, _M, _M, _M, _O, _T],  # 6
+    [_O, _M, _M, _M, _M, _M, _M, _M, _M, _M, _M, _M, _M, _M, _O, _T],  # 7
+    [_O, _M, _M, _M, _M, _M, _M, _M, _M, _M, _M, _M, _M, _M, _O, _T],  # 8
+    [_O, _M, _M, _M, _M, _M, _M, _M, _M, _M, _M, _M, _M, _S, _O, _T],  # 9
+    [_T, _O, _M, _M, _M, _M, _M, _M, _M, _M, _M, _M, _S, _O, _T, _T],  # 10
+    [_T, _O, _M, _M, _M, _M, _M, _M, _M, _M, _M, _S, _S, _O, _T, _T],  # 11
+    [_T, _T, _O, _M, _M, _M, _M, _M, _M, _M, _S, _S, _O, _T, _T, _T],  # 12
+    [_T, _T, _T, _T, _O, _M, _M, _M, _M, _M, _O, _T, _T, _T, _T, _T],  # 13
+    [_T, _T, _T, _T, _T, _O, _O, _O, _O, _O, _T, _T, _T, _T, _T, _T],  # 14
+    [_T, _T, _T, _T, _T, _T, _T, _T, _T, _T, _T, _T, _T, _T, _T, _T],  # 15
+]
 
 
 class TrayManager:
@@ -121,16 +146,33 @@ class TrayManager:
     # ------------------------------------------------------------------
 
     def _make_icon_image(self, utilization_pct: float) -> Image.Image:
-        """Create a 64x64 RGBA PIL Image with a filled color circle.
+        """Create a 64x64 RGBA PIL Image: an 8-bit coin, color-coded by utilization.
 
-        Color thresholds per TRAY-01 and STATE.md:
-          green  = (34, 197, 94)   for utilization_pct < 50
-          yellow = (234, 179, 8)   for 50 <= utilization_pct < 75
-          red    = (239, 68, 68)   for utilization_pct >= 75
+        The coin is defined as a 16×16 pixel-art grid (_COIN) scaled 4× to 64×64.
+        Highlight and shadow are derived from the main utilization color.
         """
-        color = _utilization_to_color(utilization_pct)
+        r, g, b = _utilization_to_color(utilization_pct)
+
+        def _c(v: float) -> int:
+            return max(0, min(255, int(v)))
+
+        color_map = {
+            _T: (0, 0, 0, 0),
+            _O: (_c(r * 0.35), _c(g * 0.35), _c(b * 0.35), 255),
+            _M: (r, g, b, 255),
+            _H: (_c(r * 1.5 + 20), _c(g * 1.5 + 20), _c(b * 1.5 + 20), 255),
+            _S: (_c(r * 0.50), _c(g * 0.50), _c(b * 0.50), 255),
+        }
+
+        SCALE = 4
         img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
-        ImageDraw.Draw(img).ellipse([4, 4, 60, 60], fill=color)
+        pixels = img.load()
+        for row_i, row in enumerate(_COIN):
+            for col_i, cell in enumerate(row):
+                rgba = color_map[cell]
+                for dy in range(SCALE):
+                    for dx in range(SCALE):
+                        pixels[col_i * SCALE + dx, row_i * SCALE + dy] = rgba
         return img
 
     def _build_tooltip(
@@ -146,6 +188,13 @@ class TrayManager:
         util_str = f"{utilization_pct:.1f}%" if utilization_pct is not None else "--"
         sync_str = last_sync.astimezone().strftime("%H:%M:%S") if last_sync is not None else "never"
         return f"Token Tracker  {util_str}  |  Last sync: {sync_str}"
+
+    def is_console_visible(self) -> bool:
+        """Return True when the console window is currently visible to the user."""
+        hwnd = self._top_hwnd()
+        if not hwnd:
+            return True  # no console handle — assume visible (safe default)
+        return bool(ctypes.windll.user32.IsWindowVisible(hwnd))
 
     @staticmethod
     def _top_hwnd() -> int:
@@ -222,13 +271,18 @@ class TrayManager:
 def _utilization_to_color(pct: float) -> Tuple[int, int, int]:
     """Map utilization percentage to RGB color tuple.
 
-    Thresholds per TRAY-01:
-      green  (34, 197, 94)   for pct < 50
-      yellow (234, 179, 8)   for 50 <= pct < 75
-      red    (239, 68, 68)   for pct >= 75
+      <25%:   light green (134, 239, 172)
+      25–50%: green       (34,  197, 94)
+      50–75%: yellow      (234, 179, 8)
+      75–90%: orange      (249, 115, 22)
+      >=90%:  red         (239, 68,  68)
     """
+    if pct < 25:
+        return _COLOR_LIGHT_GREEN
     if pct < 50:
         return _COLOR_GREEN
     if pct < 75:
         return _COLOR_YELLOW
+    if pct < 90:
+        return _COLOR_ORANGE
     return _COLOR_RED

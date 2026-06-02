@@ -16,11 +16,19 @@ import pytest
 
 
 class TestUtilizationToColor:
-    """_utilization_to_color() maps pct to green/yellow/red thresholds."""
+    """_utilization_to_color() maps pct to 5-band color thresholds."""
 
-    def test_zero_returns_green(self):
+    def test_zero_returns_light_green(self):
         from claude_monitor.ui.tray_manager import _utilization_to_color
-        assert _utilization_to_color(0.0) == (34, 197, 94)
+        assert _utilization_to_color(0.0) == (134, 239, 172)
+
+    def test_below_25_returns_light_green(self):
+        from claude_monitor.ui.tray_manager import _utilization_to_color
+        assert _utilization_to_color(24.9) == (134, 239, 172)
+
+    def test_exactly_25_returns_green(self):
+        from claude_monitor.ui.tray_manager import _utilization_to_color
+        assert _utilization_to_color(25.0) == (34, 197, 94)
 
     def test_below_50_returns_green(self):
         from claude_monitor.ui.tray_manager import _utilization_to_color
@@ -34,9 +42,17 @@ class TestUtilizationToColor:
         from claude_monitor.ui.tray_manager import _utilization_to_color
         assert _utilization_to_color(74.9) == (234, 179, 8)
 
-    def test_exactly_75_returns_red(self):
+    def test_exactly_75_returns_orange(self):
         from claude_monitor.ui.tray_manager import _utilization_to_color
-        assert _utilization_to_color(75.0) == (239, 68, 68)
+        assert _utilization_to_color(75.0) == (249, 115, 22)
+
+    def test_below_90_returns_orange(self):
+        from claude_monitor.ui.tray_manager import _utilization_to_color
+        assert _utilization_to_color(89.9) == (249, 115, 22)
+
+    def test_exactly_90_returns_red(self):
+        from claude_monitor.ui.tray_manager import _utilization_to_color
+        assert _utilization_to_color(90.0) == (239, 68, 68)
 
     def test_100_returns_red(self):
         from claude_monitor.ui.tray_manager import _utilization_to_color
@@ -57,13 +73,20 @@ class TestMakeIconImage:
         assert img.size == (64, 64)
         assert img.mode == "RGBA"
 
-    def test_green_center_pixel(self):
+    def test_light_green_center_pixel(self):
         from claude_monitor.ui.tray_manager import TrayManager
         tray = TrayManager(shutdown_callback=lambda: None)
         img = tray._make_icon_image(0.0)
         r, g, b, a = self._get_center_pixel(img)
-        assert (r, g, b) == (34, 197, 94)
+        assert (r, g, b) == (134, 239, 172)
         assert a == 255
+
+    def test_green_center_pixel(self):
+        from claude_monitor.ui.tray_manager import TrayManager
+        tray = TrayManager(shutdown_callback=lambda: None)
+        img = tray._make_icon_image(30.0)
+        r, g, b, a = self._get_center_pixel(img)
+        assert (r, g, b) == (34, 197, 94)
 
     def test_yellow_center_pixel(self):
         from claude_monitor.ui.tray_manager import TrayManager
@@ -72,10 +95,17 @@ class TestMakeIconImage:
         r, g, b, a = self._get_center_pixel(img)
         assert (r, g, b) == (234, 179, 8)
 
-    def test_red_center_pixel(self):
+    def test_orange_center_pixel(self):
         from claude_monitor.ui.tray_manager import TrayManager
         tray = TrayManager(shutdown_callback=lambda: None)
         img = tray._make_icon_image(80.0)
+        r, g, b, a = self._get_center_pixel(img)
+        assert (r, g, b) == (249, 115, 22)
+
+    def test_red_center_pixel(self):
+        from claude_monitor.ui.tray_manager import TrayManager
+        tray = TrayManager(shutdown_callback=lambda: None)
+        img = tray._make_icon_image(95.0)
         r, g, b, a = self._get_center_pixel(img)
         assert (r, g, b) == (239, 68, 68)
 
