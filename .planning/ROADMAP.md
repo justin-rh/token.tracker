@@ -4,7 +4,7 @@
 
 - ✅ **v1.0 Windows Foundation + Overage Pool** — Phases 1–3 (shipped 2026-05-08)
 - ✅ **v2.0 Web-Sourced Usage + System Tray** — Phases 4–6 (shipped 2026-05-19)
-- 🚧 **v2.1 Polish + Analytics** — Phases 7–10 (in progress)
+- ✅ **v2.1 Polish + Analytics** — Phases 7–10 (shipped 2026-06-02)
 
 ## Phases
 
@@ -33,7 +33,7 @@
 - [x] **Phase 7: Code Quality** — Four isolated correctness fixes with no cross-module dependencies — completed 2026-05-20
 - [x] **Phase 8: Burn Rate Accuracy** — Derive $/hr from pool_spend_usd delta over a rolling time window — completed 2026-05-20
 - [x] **Phase 9: Tray Window Lifecycle** — Window hides on close; tray icon restores it on double-click or menu — completed 2026-05-21
-- [ ] **Phase 10: Historical Analytics** — Daily pool spend bar chart rendered inline in the terminal dashboard
+- [x] **Phase 10: Historical Analytics** — Daily pool spend bar chart rendered inline in the terminal dashboard — completed 2026-06-02
 
 ## Phase Details
 
@@ -106,6 +106,6 @@ Plans:
 | 7. Code Quality | v2.1 | 3/3 | Complete | 2026-05-20 |
 | 8. Burn Rate Accuracy | v2.1 | 2/2 | Complete | 2026-05-20 |
 | 9. Tray Window Lifecycle | v2.1 | 2/2 | Complete | 2026-05-21 |
-| 10. Historical Analytics | v2.1 | 0/TBD | Not started | - |
+| 10. Historical Analytics | v2.1 | 2/2 | Complete | 2026-06-02 |
 
 Archive: `.planning/milestones/v2.0-ROADMAP.md`

@@ -215,7 +215,7 @@ class TableViewsController:
         """
         # Create summary text
         summary_lines = [
-            f"📊 {view_type.capitalize()} Usage Summary - {period}",
+            f"{view_type.capitalize()} Usage Summary - {period}",
             "",
             f"Total Tokens: {format_number(totals['total_tokens'])}",
             f"Total Cost: {format_currency(totals['total_cost'])}",

@@ -121,3 +121,95 @@ def test_col_pad_project_name_with_bracket_chars():
     assert visible_width == 22, (
         f"Expected visible width 22 for markup name, got {visible_width}: {repr(padded)}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 10: _render_daily_spend_chart() tests (ANLX-01, ANLX-02, ANLX-03)
+# ---------------------------------------------------------------------------
+
+class TestRenderDailySpendChart:
+    """Unit tests for SessionDisplayComponent._render_daily_spend_chart()."""
+
+    def _make_display(self):
+        from ui.session_display import SessionDisplayComponent
+        return SessionDisplayComponent()
+
+    def test_empty_tuple_returns_no_lines(self):
+        """Empty daily_pool_spend returns no chart lines (ANLX-03)."""
+        display = self._make_display()
+        result = display._render_daily_spend_chart((), today_str="2026-06-02")
+        assert result == []
+
+    def test_all_zero_spend_no_fallback_returns_no_lines(self):
+        """All-zero daily spend with no pool_spend_usd fallback returns [] (ANLX-03)."""
+        display = self._make_display()
+        data = (("2026-06-01", 0.0), ("2026-06-02", 0.0))
+        result = display._render_daily_spend_chart(data, today_str="2026-06-02", pool_spend_usd=0.0)
+        assert result == []
+
+    def test_seed_only_case_shows_api_total_row(self):
+        """Seed-only case: daily zeros but pool_spend_usd > 0 → shows billing cycle total row."""
+        display = self._make_display()
+        data = (("2026-06-01", 0.0), ("2026-06-02", 0.0))
+        result = display._render_daily_spend_chart(data, today_str="2026-06-02", pool_spend_usd=357.01)
+        assert len(result) > 0
+        assert "Daily pool spend" in "\n".join(result)
+        assert "$357.01" in "\n".join(result)
+        assert "API total" in "\n".join(result)
+
+    def test_nonzero_spend_returns_lines(self):
+        """At least one non-zero day produces chart lines (ANLX-01)."""
+        display = self._make_display()
+        data = (("2026-06-01", 5.00), ("2026-06-02", 0.0))
+        result = display._render_daily_spend_chart(data, today_str="2026-06-02")
+        assert len(result) > 0
+
+    def test_header_line_present(self):
+        """Chart includes 'Daily pool spend' header line."""
+        display = self._make_display()
+        data = (("2026-06-01", 5.00),)
+        result = display._render_daily_spend_chart(data, today_str="2026-06-01")
+        header_lines = [l for l in result if "Daily pool spend" in l]
+        assert len(header_lines) == 1
+
+    def test_today_marker_present(self):
+        """Today's row contains the '◀ today' marker (ANLX-02)."""
+        display = self._make_display()
+        data = (("2026-06-01", 2.00), ("2026-06-02", 5.00))
+        result = display._render_daily_spend_chart(data, today_str="2026-06-02")
+        today_lines = [l for l in result if "◀ today" in l]
+        assert len(today_lines) == 1
+
+    def test_non_today_rows_have_no_today_marker(self):
+        """Non-today rows do not contain the '◀ today' marker."""
+        display = self._make_display()
+        data = (("2026-06-01", 2.00), ("2026-06-02", 5.00))
+        result = display._render_daily_spend_chart(data, today_str="2026-06-02")
+        jun01_lines = [l for l in result if "Jun 01" in l]
+        assert len(jun01_lines) == 1
+        assert "◀ today" not in jun01_lines[0]
+
+    def test_spend_amount_shown_in_row(self):
+        """Each data row contains the spend amount formatted as '$X.XX' (ANLX-02)."""
+        display = self._make_display()
+        data = (("2026-06-01", 12.34),)
+        result = display._render_daily_spend_chart(data, today_str="2026-06-02")
+        data_lines = [l for l in result if "Jun 01" in l]
+        assert len(data_lines) == 1
+        assert "$12.34" in data_lines[0]
+
+    def test_today_uses_success_style(self):
+        """Today's bar uses [success] Rich markup (ANLX-02)."""
+        display = self._make_display()
+        data = (("2026-06-01", 5.00),)
+        result = display._render_daily_spend_chart(data, today_str="2026-06-01")
+        today_line = next(l for l in result if "Jun 01" in l)
+        assert "[success]" in today_line
+
+    def test_past_day_uses_value_style(self):
+        """Non-today bars use [value] Rich markup (ANLX-02)."""
+        display = self._make_display()
+        data = (("2026-06-01", 5.00), ("2026-06-02", 3.00))
+        result = display._render_daily_spend_chart(data, today_str="2026-06-02")
+        jun01_line = next(l for l in result if "Jun 01" in l)
+        assert "[value]" in jun01_line

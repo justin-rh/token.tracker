@@ -24,15 +24,25 @@ if sys.platform == "win32":
         # Rich's isatty() detection in conhost.
         _k32.SetConsoleOutputCP(65001)
         _k32.SetConsoleCP(65001)
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
     else:
         # Running inside Windows Terminal (ConPTY) or an initial shell session.
         # Wrap stdout/stderr with a UTF-8 TextIOWrapper for correct encoding.
         import io as _io
         sys.stdout = _io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
         sys.stderr = _io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
-    # Enable ENABLE_VIRTUAL_TERMINAL_PROCESSING for ANSI escape codes.
+    # Enable ENABLE_VIRTUAL_TERMINAL_PROCESSING for ANSI colour codes.
+    # Read-modify-write preserves other mode bits instead of clobbering them.
+    # restype=c_void_p avoids 32-bit truncation of the 64-bit HANDLE on x64.
+    _ENABLE_VT = 0x0004
     try:
-        _k32.SetConsoleMode(_k32.GetStdHandle(-11), 7)
+        _k32.GetStdHandle.restype = _ctypes.c_void_p
+        _h = _k32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+        if _h:  # None = NULL handle; skip silently
+            _mode = _ctypes.c_ulong(0)
+            if _k32.GetConsoleMode(_h, _ctypes.byref(_mode)):
+                _k32.SetConsoleMode(_h, _mode.value | _ENABLE_VT)
     except Exception:
         pass
 

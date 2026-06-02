@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Polish + Analytics
 status: completed
-stopped_at: context exhaustion at 90% (2026-05-21)
-last_updated: "2026-05-21T19:48:28.668Z"
-last_activity: 2026-05-21 — Phase 9 plan 02 executed (SetForegroundWindow, TestCloseGuard, 33/33 tests pass)
+stopped_at: ~
+last_updated: "2026-06-02T00:00:00.000Z"
+last_activity: 2026-06-02 — Phase 10 plans 01+02 executed (daily_pool_spend data layer + bar chart UI, 15/15 new tests pass)
 progress:
   total_phases: 4
-  completed_phases: 3
-  total_plans: 7
-  completed_plans: 7
+  completed_phases: 4
+  total_plans: 9
+  completed_plans: 9
   percent: 100
 ---
 
@@ -25,15 +25,15 @@ See: .planning/PROJECT.md (updated 2026-05-20)
 
 ## Current Position
 
-Phase: 9 (Tray Window Lifecycle — complete)
-Plan: 09-02 complete (SetForegroundWindow + TestCloseGuard)
-Status: Phase 9 complete — both plans executed; all TRAY requirements satisfied
-Last activity: 2026-05-21 — Phase 9 plan 02 executed (SetForegroundWindow, TestCloseGuard, 33/33 tests pass)
+Phase: 10 (Historical Analytics — complete)
+Plan: 10-02 complete (daily spend bar chart UI)
+Status: Phase 10 complete — all ANLX requirements satisfied; v2.1 milestone complete
+Last activity: 2026-06-02 — Phase 10 plans 01+02 executed (daily_pool_spend data layer + bar chart UI, 15/15 new tests pass)
 
 ## Progress Bar
 
 ```
-v2.1: [######################################  ] 95% (Phase 9 complete — Phase 10 ANLX remaining)
+v2.1: [########################################] 100% (Phase 10 complete — v2.1 milestone DONE)
 ```
 
 ## Accumulated Context

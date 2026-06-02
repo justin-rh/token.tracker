@@ -177,11 +177,6 @@ class TokenProgressBar(BaseProgressBar):
     LOW_USAGE_STYLE: Final[str] = "cost.low"
     BORDER_STYLE: Final[str] = "table.border"
 
-    # Icon constants
-    HIGH_USAGE_ICON: Final[str] = "🔴"
-    MEDIUM_USAGE_ICON: Final[str] = "🟡"
-    LOW_USAGE_ICON: Final[str] = "🟢"
-
     def render(self, percentage: float) -> str:
         """Render token usage progress bar.
 
@@ -210,12 +205,9 @@ class TokenProgressBar(BaseProgressBar):
             else self.MEDIUM_USAGE_STYLE,
         )
 
-        if percentage >= self.HIGH_USAGE_THRESHOLD:
-            icon: str = self.HIGH_USAGE_ICON
-        elif percentage >= self.MEDIUM_USAGE_THRESHOLD:
-            icon = self.MEDIUM_USAGE_ICON
-        else:
-            icon = self.LOW_USAGE_ICON
+        # Use a Rich-styled ● (U+25CF, in WGL4/Consolas) so the indicator
+        # renders in color in both Windows Terminal and conhost.exe.
+        icon: str = f"[{filled_style}]●[/]"
 
         percentage_str: str = self._format_percentage(percentage)
         return f"{icon} [{bar}] {percentage_str}"
@@ -247,7 +239,7 @@ class TimeProgressBar(BaseProgressBar):
         )
 
         remaining_time = format_time(max(0, total_minutes - elapsed_minutes))
-        return f"⏰ [{bar}] {remaining_time}"
+        return f"[dim]▪[/] [{bar}] {remaining_time}"
 
 
 class ModelUsageBar(BaseProgressBar):
@@ -264,12 +256,12 @@ class ModelUsageBar(BaseProgressBar):
         """
         if not per_model_stats:
             empty_bar = self._render_bar(0, empty_style="table.border")
-            return f"🤖 [{empty_bar}] No model data"
+            return f"[info]►[/] [{empty_bar}] No model data"
 
         model_names = list(per_model_stats.keys())
         if not model_names:
             empty_bar = self._render_bar(0, empty_style="table.border")
-            return f"🤖 [{empty_bar}] Empty model stats"
+            return f"[info]►[/] [{empty_bar}] Empty model stats"
 
         sonnet_tokens = 0
         opus_tokens = 0
@@ -289,7 +281,7 @@ class ModelUsageBar(BaseProgressBar):
 
         if total_tokens == 0:
             empty_bar = self._render_bar(0, empty_style="table.border")
-            return f"🤖 [{empty_bar}] No tokens used"
+            return f"[info]►[/] [{empty_bar}] No tokens used"
 
         sonnet_percentage = percentage(sonnet_tokens, total_tokens)
         opus_percentage = percentage(opus_tokens, total_tokens)
@@ -330,4 +322,4 @@ class ModelUsageBar(BaseProgressBar):
         else:
             summary = f"Other {other_percentage:.1f}%"
 
-        return f"🤖 [{bar_display}] {summary}"
+        return f"[info]►[/] [{bar_display}] {summary}"

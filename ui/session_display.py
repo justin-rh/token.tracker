@@ -4,7 +4,7 @@ Handles formatting of active session screens and session data display.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from datetime import timezone as dt_timezone
 from typing import Any, Optional
 
@@ -99,11 +99,11 @@ class SessionDisplayComponent:
         from claude_monitor.terminal.themes import get_cost_style
 
         if percentage < 50:
-            color = "🟢"
+            color = "[success]●[/]"
         elif percentage < 80:
-            color = "🟡"
+            color = "[warning]●[/]"
         else:
-            color = "🔴"
+            color = "[error]●[/]"
 
         progress_bar = TokenProgressBar(width=50)
         bar_style = get_cost_style(percentage)
@@ -119,6 +119,69 @@ class SessionDisplayComponent:
             )
 
         return f"{color} [{filled_bar}]"
+
+    def _render_daily_spend_chart(
+        self,
+        daily_pool_spend: tuple,
+        today_str: str,
+        pool_spend_usd: float = 0.0,
+        bar_width: int = 20,
+    ) -> list:
+        """Render a daily pool-spend bar chart as a list of Rich markup lines.
+
+        Returns [] when there is no pool spend at all (ANLX-03).
+        When auto-seed covers all spend (daily_pool_spend is all zeros but
+        pool_spend_usd > 0), renders a single "billing cycle total" row from
+        the API so the chart is not silently hidden.
+        Bar characters: █ filled, ░ empty. Today's bar uses [success] (green);
+        other days use [value] (cyan). Each row: '   MMM DD  <bar>  est. $X.XX'.
+        """
+        has_daily_data = daily_pool_spend and any(s > 0 for _, s in daily_pool_spend)
+
+        # Seed-only case: auto_seed sets seed_cutoff=tomorrow so log sessions are
+        # excluded; daily_pool_spend is all zeros but pool_spend_usd > 0 (from API).
+        if not has_daily_data:
+            if pool_spend_usd <= 0:
+                return []
+            lines = []
+            lines.append(f"[separator]{'─' * 60}[/]")
+            lines.append("📊 [value]Daily pool spend[/]")
+            filled_bar = f"[success]{'█' * bar_width}[/]"
+            lines.append(
+                f"   Billing cycle  {filled_bar}  est. ${pool_spend_usd:.2f} [dim](API total)[/]"
+            )
+            return lines
+
+        max_spend = max(s for _, s in daily_pool_spend)
+        lines = []
+        lines.append(f"[separator]{'─' * 60}[/]")
+        lines.append("📊 [value]Daily pool spend[/]")
+
+        for date_str, spend in daily_pool_spend:
+            if max_spend > 0:
+                filled_count = round((spend / max_spend) * bar_width)
+            else:
+                filled_count = 0
+            empty_count = bar_width - filled_count
+
+            is_today = date_str == today_str
+            bar_style = "success" if is_today else "value"
+
+            filled_bar = f"[{bar_style}]{'█' * filled_count}[/]" if filled_count else ""
+            empty_bar = f"[dim]{'░' * empty_count}[/]" if empty_count else ""
+
+            try:
+                parsed = date.fromisoformat(date_str)
+                label = parsed.strftime("%b %d")
+            except (ValueError, TypeError):
+                label = date_str[-5:]
+
+            today_suffix = "  [success]◀ today[/]" if is_today else ""
+            lines.append(
+                f"   {label}  {filled_bar}{empty_bar}  est. ${spend:.2f}{today_suffix}"
+            )
+
+        return lines
 
     def format_active_session_screen_v2(self, data: SessionDisplayData) -> list[str]:
         """Format complete active session screen using data class.
@@ -224,7 +287,7 @@ class SessionDisplayComponent:
                 if threshold_state.status == "calibrating":
                     # D-05: show calibration progress, no false overage warnings (D-06)
                     screen_buffer.append(
-                        f"🎯 [value]Token limit:[/]          "
+                        f"[info]▪[/] [value]Token limit:[/]          "
                         f"[dim]Calibrating ({threshold_state.completed_session_count}/10 sessions)[/]"
                     )
                     # D-06: INCLUDED/OVERAGE row suppressed entirely during calibration
@@ -236,7 +299,7 @@ class SessionDisplayComponent:
                         else " (est. — web unavailable)"
                     )
                     screen_buffer.append(
-                        f"🎯 [value]Token limit:[/]          "
+                        f"[info]▪[/] [value]Token limit:[/]          "
                         f"[info]{threshold_state.threshold_tokens:,} tokens[/]"
                         f" [dim](P90){web_unavailable_suffix}[/]"
                     )
@@ -244,11 +307,11 @@ class SessionDisplayComponent:
                     tokens_used_val = kwargs.get("tokens_used", tokens_used)
                     if tokens_used_val > threshold_state.threshold_tokens:
                         screen_buffer.append(
-                            "🔴 [error]Status:[/]               [error]OVERAGE[/]"
+                            "[error]●[/] [error]Status:[/]               [error]OVERAGE[/]"
                         )
                     else:
                         screen_buffer.append(
-                            "✅ [success]Status:[/]              [success]INCLUDED[/]"
+                            "[success]●[/] [success]Status:[/]              [success]INCLUDED[/]"
                         )
                 else:  # manual
                     # D-08: show manually-configured value
@@ -258,7 +321,7 @@ class SessionDisplayComponent:
                         else " (est. — web unavailable)"
                     )
                     screen_buffer.append(
-                        f"🎯 [value]Token limit:[/]          "
+                        f"[info]▪[/] [value]Token limit:[/]          "
                         f"[info]{threshold_state.threshold_tokens:,} tokens[/]"
                         f" [dim](manual){web_unavailable_suffix}[/]"
                     )
@@ -266,11 +329,11 @@ class SessionDisplayComponent:
                     tokens_used_val = kwargs.get("tokens_used", tokens_used)
                     if tokens_used_val > threshold_state.threshold_tokens:
                         screen_buffer.append(
-                            "🔴 [error]Status:[/]               [error]OVERAGE[/]"
+                            "[error]●[/] [error]Status:[/]               [error]OVERAGE[/]"
                         )
                     else:
                         screen_buffer.append(
-                            "✅ [success]Status:[/]              [success]INCLUDED[/]"
+                            "[success]●[/] [success]Status:[/]              [success]INCLUDED[/]"
                         )
 
             # Phase 3: Pool Dashboard rows (D-12, D-13, D-14; OVGE-01 through OVGE-04, DISP-02)
@@ -310,8 +373,16 @@ class SessionDisplayComponent:
                         else:
                             exhaust_str = "—"
                         screen_buffer.append(
-                            f"🔥 [value]Pool burn:[/]    est. ${burn_rate_usd_per_hr:.2f}/hr — {exhaust_str}"
+                            f"[warning]▲[/] [value]Pool burn:[/]    est. ${burn_rate_usd_per_hr:.2f}/hr — {exhaust_str}"
                         )
+
+                # Phase 10: Daily pool spend chart (ANLX-01, ANLX-02, ANLX-03)
+                chart_lines = self._render_daily_spend_chart(
+                    pool_state.daily_pool_spend,
+                    today_str=date.today().isoformat(),
+                    pool_spend_usd=pool_state.pool_spend_usd,
+                )
+                screen_buffer.extend(chart_lines)
 
             # Phase 6: Per-project token breakdown (D-14, PROJ-01, PROJ-02, PROJ-03)
             project_breakdown = kwargs.get("project_breakdown")
@@ -351,7 +422,7 @@ class SessionDisplayComponent:
                 mins = rem // 60
                 reset_str = f"{days}d {hours}h {mins}m" if days else f"{hours}h {mins}m"
                 screen_buffer.append(
-                    f"⏱  [value]Resets in:[/]     {reset_str}"
+                    f"[dim]▪[/] [value]Resets in:[/]     {reset_str}"
                 )
 
                 # D-19: Last web sync footer (shown after first successful fetch)
@@ -364,15 +435,15 @@ class SessionDisplayComponent:
                 # D-08: Model Distribution, Burn Rate, Cost Rate moved here (Phase 6)
                 if per_model_stats:
                     model_bar = self.model_usage.render(per_model_stats)
-                    screen_buffer.append(f"🤖 [value]Model Distribution:[/]   {model_bar}")
+                    screen_buffer.append(f"[info]►[/] [value]Model Distribution:[/]   {model_bar}")
                 else:
                     model_bar = self.model_usage.render({})
-                    screen_buffer.append(f"🤖 [value]Model Distribution:[/]   {model_bar}")
+                    screen_buffer.append(f"[info]►[/] [value]Model Distribution:[/]   {model_bar}")
                 screen_buffer.append(f"[separator]{'─' * 60}[/]")
 
                 velocity_emoji = VelocityIndicator.get_velocity_emoji(burn_rate)
                 screen_buffer.append(
-                    f"🔥 [value]Burn Rate:[/]              [warning]{burn_rate:.1f}[/] [dim]tokens/min[/] {velocity_emoji}"
+                    f"[warning]▲[/] [value]Burn Rate:[/]              [warning]{burn_rate:.1f}[/] [dim]tokens/min[/] {velocity_emoji}"
                 )
 
                 cost_per_min = (
@@ -382,7 +453,7 @@ class SessionDisplayComponent:
                 )
                 cost_per_min_display = CostIndicator.render(cost_per_min)
                 screen_buffer.append(
-                    f"💲 [value]Cost Rate:[/]              {cost_per_min_display} [dim]$/min[/]"
+                    f"[value]$[/] [value]Cost Rate:[/]              {cost_per_min_display} [dim]$/min[/]"
                 )
         else:
             cost_display = CostIndicator.render(session_cost)
@@ -392,39 +463,39 @@ class SessionDisplayComponent:
                 else 0
             )
             cost_per_min_display = CostIndicator.render(cost_per_min)
-            screen_buffer.append(f"💲 [value]Session Cost:[/]   {cost_display}")
+            screen_buffer.append(f"[value]$[/] [value]Session Cost:[/]   {cost_display}")
             screen_buffer.append(
-                f"💲 [value]Cost Rate:[/]      {cost_per_min_display} [dim]$/min[/]"
+                f"[value]$[/] [value]Cost Rate:[/]      {cost_per_min_display} [dim]$/min[/]"
             )
             screen_buffer.append("")
 
             token_bar = self.token_progress.render(usage_percentage)
-            screen_buffer.append(f"📊 [value]Token Usage:[/]    {token_bar}")
+            screen_buffer.append(f"[info]▪[/] [value]Token Usage:[/]    {token_bar}")
             screen_buffer.append("")
 
             screen_buffer.append(
-                f"🎯 [value]Tokens:[/]         [value]{tokens_used:,}[/] / [dim]~{token_limit:,}[/] ([info]{tokens_left:,} left[/])"
+                f"[info]▪[/] [value]Tokens:[/]         [value]{tokens_used:,}[/] / [dim]~{token_limit:,}[/] ([info]{tokens_left:,} left[/])"
             )
 
             velocity_emoji = VelocityIndicator.get_velocity_emoji(burn_rate)
             screen_buffer.append(
-                f"🔥 [value]Burn Rate:[/]      [warning]{burn_rate:.1f}[/] [dim]tokens/min[/] {velocity_emoji}"
+                f"[warning]▲[/] [value]Burn Rate:[/]      [warning]{burn_rate:.1f}[/] [dim]tokens/min[/] {velocity_emoji}"
             )
 
             screen_buffer.append(
-                f"📨 [value]Sent Messages:[/]  [info]{sent_messages}[/] [dim]messages[/]"
+                f"[dim]▪[/] [value]Sent Messages:[/]  [info]{sent_messages}[/] [dim]messages[/]"
             )
 
             if per_model_stats:
                 model_bar = self.model_usage.render(per_model_stats)
-                screen_buffer.append(f"🤖 [value]Model Usage:[/]    {model_bar}")
+                screen_buffer.append(f"[info]►[/] [value]Model Usage:[/]    {model_bar}")
 
             screen_buffer.append("")
 
             time_bar = self.time_progress.render(
                 elapsed_session_minutes, total_session_minutes
             )
-            screen_buffer.append(f"⏱️  [value]Time to Reset:[/]  {time_bar}")
+            screen_buffer.append(f"[dim]▪[/] [value]Time to Reset:[/]  {time_bar}")
             screen_buffer.append("")
 
         screen_buffer.append("")
@@ -447,7 +518,7 @@ class SessionDisplayComponent:
         )
 
         screen_buffer.append(
-            f"⏰ [dim]{current_time_str}[/] 📝 [success]Active session[/] | [dim]Ctrl+C to exit[/] 🟢"
+            f"[dim]▪[/] [dim]{current_time_str}[/] [success]Active session[/] | [dim]Ctrl+C to exit[/] [success]●[/]"
         )
 
         return screen_buffer
@@ -481,13 +552,13 @@ class SessionDisplayComponent:
 
         if show_exceed_notification:
             screen_buffer.append(
-                "⚠️  [error]You have exceeded the maximum cost limit![/]"
+                "[error]▲[/] [error]You have exceeded the maximum cost limit![/]"
             )
             notifications_added = True
 
         if show_tokens_will_run_out:
             screen_buffer.append(
-                "⏰ [warning]Cost limit will be exceeded before reset![/]"
+                "[warning]▲[/] [warning]Cost limit will be exceeded before reset![/]"
             )
             notifications_added = True
 
@@ -521,19 +592,19 @@ class SessionDisplayComponent:
         screen_buffer.extend(header_manager.create_header(plan, timezone))
 
         empty_token_bar = self.token_progress.render(0.0)
-        screen_buffer.append(f"📊 [value]Token Usage:[/]    {empty_token_bar}")
+        screen_buffer.append(f"[info]▪[/] [value]Token Usage:[/]    {empty_token_bar}")
         screen_buffer.append("")
 
         screen_buffer.append(
-            f"🎯 [value]Tokens:[/]         [value]0[/] / [dim]~{token_limit:,}[/] ([info]0 left[/])"
+            f"[info]▪[/] [value]Tokens:[/]         [value]0[/] / [dim]~{token_limit:,}[/] ([info]0 left[/])"
         )
         screen_buffer.append(
-            "🔥 [value]Burn Rate:[/]      [warning]0.0[/] [dim]tokens/min[/]"
+            "[warning]▲[/] [value]Burn Rate:[/]      [warning]0.0[/] [dim]tokens/min[/]"
         )
         screen_buffer.append(
-            "💲 [value]Cost Rate:[/]      [cost.low]$0.00[/] [dim]$/min[/]"
+            "[value]$[/] [value]Cost Rate:[/]      [cost.low]$0.00[/] [dim]$/min[/]"
         )
-        screen_buffer.append("📨 [value]Sent Messages:[/]  [info]0[/] [dim]messages[/]")
+        screen_buffer.append("[dim]▪[/] [value]Sent Messages:[/]  [info]0[/] [dim]messages[/]")
         screen_buffer.append("")
 
         if current_time and args:
@@ -546,15 +617,15 @@ class SessionDisplayComponent:
                     include_seconds=True,
                 )
                 screen_buffer.append(
-                    f"⏰ [dim]{current_time_str}[/] 📝 [info]No active session[/] | [dim]Ctrl+C to exit[/] 🟨"
+                    f"[dim]▪[/] [dim]{current_time_str}[/] [dim]No active session[/] | [dim]Ctrl+C to exit[/] [dim]●[/]"
                 )
             except (pytz.exceptions.UnknownTimeZoneError, AttributeError):
                 screen_buffer.append(
-                    "⏰ [dim]--:--:--[/] 📝 [info]No active session[/] | [dim]Ctrl+C to exit[/] 🟨"
+                    "[dim]▪[/] [dim]--:--:--[/] [dim]No active session[/] | [dim]Ctrl+C to exit[/] [dim]●[/]"
                 )
         else:
             screen_buffer.append(
-                "⏰ [dim]--:--:--[/] 📝 [info]No active session[/] | [dim]Ctrl+C to exit[/] 🟨"
+                "[dim]▪[/] [dim]--:--:--[/] [dim]No active session[/] | [dim]Ctrl+C to exit[/] [dim]●[/]"
             )
 
         return screen_buffer

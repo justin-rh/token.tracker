@@ -366,3 +366,66 @@ def test_billing_cycle_start_exact_match_day(tmp_path):
     )
     cycle_start = date.fromisoformat(result.billing_cycle_start)
     assert cycle_start == date(2026, 3, 1), f"Expected 2026-03-01, got {cycle_start}"
+
+
+# ---------------------------------------------------------------------------
+# Phase 10: daily_pool_spend tests (ANLX-01, ANLX-03)
+# ---------------------------------------------------------------------------
+
+class TestDailyPoolSpend:
+    """daily_pool_spend tuple covers all days; only overage blocks contribute."""
+
+    def test_no_overage_blocks_empty_spend(self, tmp_path):
+        """All blocks below threshold → all daily spend values are 0.0."""
+        blocks = [make_block(tokens=10_000, cost=0.05, start_time="2026-06-01T10:00:00")]
+        result = compute_pool_state(blocks, KNOWN_STATE, config_dir=tmp_path, today=date(2026, 6, 2))
+        assert all(spend == 0.0 for _, spend in result.daily_pool_spend)
+        # Covers 2 days: Jun 01 and Jun 02
+        assert len(result.daily_pool_spend) == 2
+
+    def test_single_overage_block_buckets_to_correct_date(self, tmp_path):
+        """A single overage block is bucketed to its start date."""
+        blocks = [make_block(tokens=200_000, cost=1.50, start_time="2026-06-01T14:30:00")]
+        result = compute_pool_state(blocks, KNOWN_STATE, config_dir=tmp_path, today=date(2026, 6, 1))
+        assert len(result.daily_pool_spend) == 1
+        date_str, spend = result.daily_pool_spend[0]
+        assert date_str == "2026-06-01"
+        assert abs(spend - 1.50) < 0.001
+
+    def test_multi_day_spend_bucketed_correctly(self, tmp_path):
+        """Overage blocks on different days are bucketed independently."""
+        blocks = [
+            make_block(tokens=200_000, cost=2.00, start_time="2026-06-01T09:00:00"),
+            make_block(tokens=150_000, cost=1.00, start_time="2026-06-02T11:00:00"),
+            make_block(tokens=300_000, cost=3.50, start_time="2026-06-02T15:00:00"),
+        ]
+        result = compute_pool_state(blocks, KNOWN_STATE, config_dir=tmp_path, today=date(2026, 6, 2))
+        spend_map = dict(result.daily_pool_spend)
+        assert abs(spend_map["2026-06-01"] - 2.00) < 0.001
+        assert abs(spend_map["2026-06-02"] - 4.50) < 0.001
+
+    def test_full_day_range_includes_zero_days(self, tmp_path):
+        """daily_pool_spend covers every day from billing_cycle_start to today, gaps filled with 0.0."""
+        blocks = [make_block(tokens=200_000, cost=1.00, start_time="2026-06-01T10:00:00")]
+        result = compute_pool_state(blocks, KNOWN_STATE, config_dir=tmp_path, today=date(2026, 6, 3))
+        spend_map = dict(result.daily_pool_spend)
+        assert spend_map["2026-06-01"] > 0
+        assert spend_map["2026-06-02"] == 0.0
+        assert spend_map["2026-06-03"] == 0.0
+        assert len(result.daily_pool_spend) == 3
+
+    def test_calibrating_state_all_zero(self, tmp_path):
+        """When calibrating (threshold_tokens=None), all daily spend values are 0.0."""
+        blocks = [make_block(tokens=200_000, cost=1.00, start_time="2026-06-01T10:00:00")]
+        result = compute_pool_state(blocks, CALIBRATING_STATE, config_dir=tmp_path, today=date(2026, 6, 1))
+        assert all(spend == 0.0 for _, spend in result.daily_pool_spend)
+
+    def test_gap_blocks_excluded_from_daily_spend(self, tmp_path):
+        """Gap blocks are not bucketed into daily spend."""
+        blocks = [
+            make_block(gap=True, tokens=200_000, cost=5.00, start_time="2026-06-01T10:00:00"),
+            make_block(tokens=200_000, cost=1.00, start_time="2026-06-01T12:00:00"),
+        ]
+        result = compute_pool_state(blocks, KNOWN_STATE, config_dir=tmp_path, today=date(2026, 6, 1))
+        spend_map = dict(result.daily_pool_spend)
+        assert abs(spend_map["2026-06-01"] - 1.00) < 0.001

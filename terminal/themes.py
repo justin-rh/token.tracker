@@ -142,10 +142,10 @@ class AdaptiveColorScheme:
                 "separator": "color(248)",  # Light gray (#a8a8a8) - 9:1 contrast
                 "progress_bar": "white",  # Pure white for dark theme
                 "highlight": "color(203)",  # Light red (#ff5f5f) - matches error
-                # Cost styles
-                "cost.low": "white",  # Pure white for dark theme
-                "cost.medium": "white",  # Pure white for dark theme
-                "cost.high": "white",  # Pure white for dark theme
+                # Cost styles — distinct colors so bar fill conveys usage level
+                "cost.low": "color(118)",   # Light green (#87ff00) — matches success
+                "cost.medium": "color(214)", # Orange (#ffaf00) — matches warning
+                "cost.high": "color(203)",  # Light red (#ff5f5f) — matches error
                 # Table styles
                 "table.border": "color(248)",  # Light gray
                 "table.header": "bold color(117)",  # Bold light blue
@@ -608,6 +608,8 @@ class ThemeManager:
         return Console(
             theme=theme.rich_theme,
             force_terminal=True,
+            color_system="truecolor",
+            legacy_windows=False,
             width=_get_console_width(),
         )
 
@@ -636,10 +638,10 @@ COST_THRESHOLDS: List[Tuple[float, str]] = [
 
 # Velocity/burn rate emojis and labels
 VELOCITY_INDICATORS: Dict[str, Dict[str, Union[str, float]]] = {
-    "slow": {"emoji": "🐌", "label": "Slow", "threshold": 50},
-    "normal": {"emoji": "➡️", "label": "Normal", "threshold": 150},
-    "fast": {"emoji": "🚀", "label": "Fast", "threshold": 300},
-    "very_fast": {"emoji": "⚡", "label": "Very fast", "threshold": float("inf")},
+    "slow": {"emoji": "[dim]→[/]", "label": "Slow", "threshold": 50},
+    "normal": {"emoji": "[info]→[/]", "label": "Normal", "threshold": 150},
+    "fast": {"emoji": "[warning]→→[/]", "label": "Fast", "threshold": 300},
+    "very_fast": {"emoji": "[error]→→→[/]", "label": "Very fast", "threshold": float("inf")},
 }
 
 

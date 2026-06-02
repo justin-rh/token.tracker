@@ -16,7 +16,7 @@ Key decisions implemented (from 03-CONTEXT.md):
 import json
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, Tuple, Union
 
@@ -35,6 +35,7 @@ class PoolState:
     pool_pct_spent: float       # (pool_spend_usd / pool_size_usd) * 100
     billing_cycle_start: str    # ISO date string "YYYY-MM-DD"
     is_overage: bool            # True when at least one OVERAGE session exists in period
+    daily_pool_spend: tuple = ()  # ((date_str, spend_usd), ...) sorted asc; all days in billing period
 
 
 def _read_pool_config(config_dir: Path) -> Tuple[float, int, float, Optional[datetime], bool]:
@@ -291,8 +292,9 @@ def compute_pool_state(
     if seed_cutoff is not None and seed_cutoff.date() > cycle_start:
         log_cutoff = seed_cutoff
 
-    # Sum OVERAGE session costs since log_cutoff (D-01, D-02, D-03)
+    # Sum OVERAGE session costs since log_cutoff (D-01, D-02, D-03); bucket by date for ANLX-01
     pool_spend_usd = seed_usd
+    daily_spend: dict = {}
     for block in blocks:
         # Skip gap blocks (idle placeholders). Active blocks are included so the
         # pool bar reflects real-time spend during an ongoing session.
@@ -303,7 +305,26 @@ def compute_pool_state(
             continue
         # OVERAGE classification: all sessions (Teams/Enterprise) or threshold-based (Max plan)
         if all_sessions or _classify_overage(block, threshold_tokens):
-            pool_spend_usd += block.get("costUSD", 0.0)
+            cost = block.get("costUSD", 0.0)
+            pool_spend_usd += cost
+            # Bucket by calendar date for daily chart (ANLX-01)
+            start_raw = block.get("startTime", "")
+            try:
+                block_date_str = datetime.fromisoformat(start_raw).date().isoformat()
+            except (ValueError, TypeError):
+                block_date_str = None
+            if block_date_str:
+                daily_spend[block_date_str] = daily_spend.get(block_date_str, 0.0) + cost
+
+    # Build complete daily series: every day from cycle_start to today (ANLX-01, D-01 in 10-CONTEXT)
+    _today = today if today is not None else date.today()
+    _day = cycle_start
+    _days: list = []
+    while _day <= _today:
+        _day_str = _day.isoformat()
+        _days.append((_day_str, daily_spend.get(_day_str, 0.0)))
+        _day += timedelta(days=1)
+    daily_pool_spend_tuple = tuple(_days)
 
     # Derived metrics
     pool_remaining_usd = max(0.0, pool_size_usd - pool_spend_usd)
@@ -319,6 +340,7 @@ def compute_pool_state(
         pool_pct_spent=pool_pct_spent,
         billing_cycle_start=billing_cycle_start_str,
         is_overage=is_overage,
+        daily_pool_spend=daily_pool_spend_tuple,
     )
 
     # Write cache atomically on every cycle (D-04, OVGE-05)
