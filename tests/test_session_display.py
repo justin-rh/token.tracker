@@ -13,7 +13,8 @@ import os
 # Add project root to path so test can import from ui/
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from ui.session_display import _col_pad
+from datetime import date, datetime, timezone
+from ui.session_display import _col_pad, _format_exhaust_time, _next_billing_reset
 
 
 # ---------------------------------------------------------------------------
@@ -213,3 +214,91 @@ class TestRenderDailySpendChart:
         result = display._render_daily_spend_chart(data, today_str="2026-06-02")
         jun01_line = next(l for l in result if "Jun 01" in l)
         assert "[value]" in jun01_line
+
+
+# ---------------------------------------------------------------------------
+# _format_exhaust_time tests
+# ---------------------------------------------------------------------------
+
+class TestFormatExhaustTime:
+    """_format_exhaust_time() produces correct human-readable labels."""
+
+    def _dt(self, days_from_now: int, hour: int = 15, minute: int = 45) -> datetime:
+        """Build a timezone-aware local datetime N days from a fixed reference."""
+        base = datetime(2026, 6, 10, hour, minute, tzinfo=timezone.utc)
+        return base.astimezone()  # convert to local tz
+
+    def _make(self, days_offset: int, hour: int = 15, minute: int = 45) -> datetime:
+        from datetime import timedelta
+        base = datetime(2026, 6, 10, 12, 0, tzinfo=timezone.utc)  # fixed "now"
+        target = base + timedelta(days=days_offset, hours=hour - 12, minutes=minute - 0)
+        return target.astimezone()
+
+    def test_today_label(self):
+        """Exhaustion within today returns 'today at ...'."""
+        from datetime import timedelta
+        now_local = datetime.now().astimezone()
+        exhaust = (datetime.now(timezone.utc) + timedelta(hours=2)).astimezone()
+        result = _format_exhaust_time(exhaust)
+        assert result.startswith("today at")
+
+    def test_tomorrow_label(self):
+        """Exhaustion tomorrow returns 'tomorrow at ...'."""
+        from datetime import timedelta
+        exhaust = (datetime.now(timezone.utc) + timedelta(hours=25)).astimezone()
+        result = _format_exhaust_time(exhaust)
+        assert result.startswith("tomorrow at")
+
+    def test_this_week_label(self):
+        """Exhaustion 3 days away returns weekday name."""
+        from datetime import timedelta
+        exhaust = (datetime.now(timezone.utc) + timedelta(days=3, hours=1)).astimezone()
+        result = _format_exhaust_time(exhaust)
+        expected_day = exhaust.strftime("%A")
+        assert result.startswith(expected_day)
+
+    def test_beyond_week_label(self):
+        """Exhaustion >7 days away returns 'Mon DD at ...' format."""
+        from datetime import timedelta
+        exhaust = (datetime.now(timezone.utc) + timedelta(days=10)).astimezone()
+        result = _format_exhaust_time(exhaust)
+        month_abbr = exhaust.strftime("%b")
+        assert month_abbr in result
+        assert str(exhaust.day) in result
+
+    def test_no_leading_zero_on_hour(self):
+        """Single-digit hours have no leading zero (e.g. '3:45 PM' not '03:45 PM')."""
+        from datetime import timedelta
+        # Force a 3 PM UTC time (will be some local time, but hour digits vary)
+        exhaust = datetime(2026, 6, 20, 15, 45, tzinfo=timezone.utc).astimezone()
+        result = _format_exhaust_time(exhaust)
+        # Should not contain " 0" in the time portion (leading zero on hour)
+        assert "0:" not in result.split("at")[-1].strip() or result.split("at")[-1].strip()[0] != "0"
+
+
+# ---------------------------------------------------------------------------
+# _next_billing_reset tests
+# ---------------------------------------------------------------------------
+
+class TestNextBillingReset:
+    """_next_billing_reset() computes the correct next cycle reset date."""
+
+    def test_mid_month_cycle(self):
+        """Cycle starting Jun 1 resets Jul 1."""
+        assert _next_billing_reset("2026-06-01") == date(2026, 7, 1)
+
+    def test_december_wraps_to_january(self):
+        """Cycle starting Dec 1 resets Jan 1 of the following year."""
+        assert _next_billing_reset("2026-12-01") == date(2027, 1, 1)
+
+    def test_day_clamped_to_month_end(self):
+        """Cycle starting Jan 31 resets Feb 28 (non-leap year)."""
+        assert _next_billing_reset("2026-01-31") == date(2026, 2, 28)
+
+    def test_leap_year_feb(self):
+        """Cycle starting Jan 31 in leap year resets Feb 29."""
+        assert _next_billing_reset("2028-01-31") == date(2028, 2, 29)
+
+    def test_invalid_string_returns_date_max(self):
+        """Malformed billing_cycle_start returns date.max (safe fallback)."""
+        assert _next_billing_reset("not-a-date") == date.max

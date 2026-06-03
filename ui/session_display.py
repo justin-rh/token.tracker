@@ -4,7 +4,8 @@ Handles formatting of active session screens and session data display.
 """
 
 from dataclasses import dataclass
-from datetime import date, datetime
+import calendar as _calendar
+from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
 from typing import Any, Optional
 
@@ -47,6 +48,41 @@ def _col_pad(s: str, width: int) -> str:
     stripped = _re.sub(r'\[/?[^\]]*\]', '', s)
     visible = sum(2 if _ud.east_asian_width(c) in ('W', 'F') else 1 for c in stripped)
     return s + ' ' * max(0, width - visible)
+
+
+def _format_exhaust_time(exhaust_local: datetime) -> str:
+    """Format pool exhaustion datetime as a concise human-readable local-time string.
+
+    Examples: "today at 3:45 PM", "tomorrow at 11:00 AM", "Friday at 8:30 PM", "Jun 16 at 2:15 PM"
+    """
+    now_local = datetime.now(exhaust_local.tzinfo)
+    days_away = (exhaust_local.date() - now_local.date()).days
+    h = exhaust_local.strftime("%I").lstrip("0") or "12"
+    time_str = f"{h}:{exhaust_local.strftime('%M')} {exhaust_local.strftime('%p')}"
+    if days_away == 0:
+        return f"today at {time_str}"
+    if days_away == 1:
+        return f"tomorrow at {time_str}"
+    if days_away < 7:
+        return f"{exhaust_local.strftime('%A')} at {time_str}"
+    return f"{exhaust_local.strftime('%b')} {exhaust_local.day} at {time_str}"
+
+
+def _next_billing_reset(billing_cycle_start_str: str) -> date:
+    """Return the date of the next billing cycle reset (one month after cycle start).
+
+    Clamps the day to the last valid day of the target month (e.g. Jan 31 → Feb 28).
+    Returns date.max on parse error so comparisons stay safe.
+    """
+    try:
+        start = date.fromisoformat(billing_cycle_start_str)
+        year, month = start.year, start.month + 1
+        if month > 12:
+            year, month = year + 1, 1
+        max_day = _calendar.monthrange(year, month)[1]
+        return date(year, month, min(start.day, max_day))
+    except (ValueError, TypeError):
+        return date.max
 
 
 @dataclass
@@ -367,22 +403,53 @@ class SessionDisplayComponent:
                     f"   {pool_bar} {pct_remaining:.1f}% remaining"
                 )
 
-                # Burn rate — OVERAGE state + sufficient ring buffer history (D-09, BURN-01, BURN-02)
-                # pool_burn_rate_usd_per_hr is float | None from monitoring orchestrator ring buffer.
-                # None means <2 spend samples in the 30-min window — row is omitted entirely (BURN-02).
-                if pool_state.is_overage:
-                    burn_rate_usd_per_hr = kwargs.get("pool_burn_rate_usd_per_hr")
-                    if burn_rate_usd_per_hr is not None:
-                        if burn_rate_usd_per_hr > 0:
-                            remaining_hrs = pool_state.pool_remaining_usd / burn_rate_usd_per_hr
-                            hours = int(remaining_hrs)
-                            mins = int((remaining_hrs - hours) * 60)
-                            exhaust_str = f"~{hours}h {mins}m remaining"
-                        else:
-                            exhaust_str = "—"
+                # Burn rate + exhaustion projection (BURN-01, BURN-02 + smarter projections)
+                # Gate on pool_spend_usd > 0 (not is_overage) so Teams/Enterprise accounts
+                # with all_sessions=True (threshold_tokens=None → is_overage=False) still see
+                # the projection.
+                if pool_state.pool_spend_usd > 0:
+                    ring_rate = kwargs.get("pool_burn_rate_usd_per_hr")
+
+                    if ring_rate is not None and ring_rate > 0:
+                        # Prefer the 30-min ring buffer rate — most recent and accurate.
+                        rate = ring_rate
+                        rate_str = f"est. ${rate:.2f}/hr"
+                    else:
+                        # Fallback: billing-cycle average. The ring buffer needs spend to
+                        # change between cycles; seed-only accounts never trigger it.
+                        try:
+                            _cycle_start = date.fromisoformat(pool_state.billing_cycle_start)
+                            _days_elapsed = max(1, (date.today() - _cycle_start).days)
+                            rate = pool_state.pool_spend_usd / (_days_elapsed * 24)
+                            rate_str = f"est. ${rate:.2f}/hr [dim](cycle avg)[/]"
+                        except (ValueError, TypeError):
+                            rate = 0.0
+                            rate_str = ""
+
+                    if rate > 0:
+                        remaining_hrs = pool_state.pool_remaining_usd / rate
+                        hours = int(remaining_hrs)
+                        mins = int((remaining_hrs - hours) * 60)
+                        time_left_str = f"~{hours}h {mins}m remaining"
+
+                        now_utc = datetime.now(dt_timezone.utc)
+                        exhaust_at = (now_utc + timedelta(hours=remaining_hrs)).astimezone()
+                        exhaust_label = _format_exhaust_time(exhaust_at)
+
                         screen_buffer.append(
-                            f"[warning]▲[/] [value]Pool burn:[/]    est. ${burn_rate_usd_per_hr:.2f}/hr — {exhaust_str}"
+                            f"[warning]▲[/] [value]Pool burn:[/]    {rate_str} — {time_left_str}"
                         )
+                        screen_buffer.append(
+                            f"   [dim]Exhausted by:[/]  [value]{exhaust_label}[/]"
+                        )
+
+                        next_reset = _next_billing_reset(pool_state.billing_cycle_start)
+                        if exhaust_at.date() < next_reset:
+                            days_early = (next_reset - exhaust_at.date()).days
+                            reset_label = f"{next_reset.strftime('%b')} {next_reset.day}"
+                            screen_buffer.append(
+                                f"[error]⚠[/]  [error]Pool exhausts {days_early}d before cycle reset ({reset_label})[/]"
+                            )
 
                 # Phase 10: Daily pool spend chart (ANLX-01, ANLX-02, ANLX-03)
                 chart_lines = self._render_daily_spend_chart(
