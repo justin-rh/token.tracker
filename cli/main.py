@@ -255,6 +255,23 @@ def _run_monitoring(args: argparse.Namespace) -> None:
             tray_manager.start()
             orchestrator.set_visibility_check(tray_manager.is_console_visible)
 
+            def _on_console_restore() -> None:
+                """Clear the screen on restore so Rich re-renders from a known position.
+
+                While the window is hidden the monitoring thread may write log output
+                to the console, shifting the cursor. Rich's next update(refresh=True)
+                uses cursor-up by the last-known render height — if the cursor drifted,
+                content lands in the wrong place and the display appears blank.
+                Clearing resets cursor to (0,0) so the first post-restore render is clean.
+                """
+                try:
+                    sys.stdout.write("\033[2J\033[H")
+                    sys.stdout.flush()
+                except Exception:
+                    pass
+
+            tray_manager.set_restore_callback(_on_console_restore)
+
             # Setup monitoring callback
             def on_data_update(monitoring_data: Dict[str, Any]) -> None:
                 """Handle data updates from orchestrator."""

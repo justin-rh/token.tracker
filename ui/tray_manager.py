@@ -92,6 +92,7 @@ class TrayManager:
         self._saved_exstyle: Optional[int] = None  # original exstyle before hide
         self._ctrl_handler_cb = None  # prevents GC of SetConsoleCtrlHandler callback
         self._console_hidden: bool = False  # set by _do_hide/_do_show; avoids polling IsWindowVisible
+        self._on_restore: Optional[Callable[[], None]] = None
 
     def start(self) -> None:
         """Create pystray Icon and call run_detached().
@@ -197,6 +198,15 @@ class TrayManager:
         sync_str = last_sync.astimezone().strftime("%H:%M:%S") if last_sync is not None else "never"
         return f"Token Tracker  {util_str}  |  Last sync: {sync_str}"
 
+    def set_restore_callback(self, callback: Callable[[], None]) -> None:
+        """Register a callback invoked immediately after the console window is shown.
+
+        Used to reset the terminal cursor position so Rich's cursor-tracking
+        stays correct after the window was hidden (log output written while
+        hidden shifts the cursor, causing the next render to land in the wrong spot).
+        """
+        self._on_restore = callback
+
     def is_console_visible(self) -> bool:
         """Return True when the console window is visible to the user.
 
@@ -293,6 +303,8 @@ class TrayManager:
         ctypes.windll.user32.ShowWindow(hwnd, SW_RESTORE)
         ctypes.windll.user32.SetForegroundWindow(hwnd)
         self._console_hidden = False
+        if self._on_restore is not None:
+            self._on_restore()
 
     def _quit(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         """Trigger clean shutdown identical to Ctrl+C (TRAY-03 Quit).
