@@ -148,12 +148,6 @@ class LoadingScreenComponent:
 
         screen_buffer.append("")
 
-        if plan == "custom" and not custom_message:
-            screen_buffer.append(
-                "[info]Calculating your P90 session limits from usage history...[/]"
-            )
-            screen_buffer.append("")
-
         screen_buffer.append("[dim]This may take a few seconds[/]")
 
         return screen_buffer

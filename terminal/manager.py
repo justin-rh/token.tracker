@@ -64,7 +64,7 @@ def enter_alternate_screen() -> None:
     - Move cursor to home position (\033[H)
     - Hide cursor (\033[?25l)
     """
-    print("\033[?1049h\033[2J\033[H\033[?25l", end="", flush=True)
+    print("\033]0;Claude Token Tracker\007\033[?1049h\033[2J\033[H\033[?25l", end="", flush=True)
 
 
 def handle_cleanup_and_exit(
