@@ -235,6 +235,10 @@ def _run_monitoring(args: argparse.Namespace) -> None:
             live_display_active = True
             live_display.update(loading_display, refresh=True)
 
+            # Mutable container so _on_console_restore (defined below) can
+            # immediately re-paint the last frame after clearing the screen.
+            _last_renderable: List[Any] = [loading_display]
+
             orchestrator = MonitoringOrchestrator(
                 update_interval=(
                     args.refresh_rate if hasattr(args, "refresh_rate") else 10
@@ -256,19 +260,20 @@ def _run_monitoring(args: argparse.Namespace) -> None:
             orchestrator.set_visibility_check(tray_manager.is_console_visible)
 
             def _on_console_restore() -> None:
-                """Clear the screen on restore so Rich re-renders from a known position.
+                """Clear the screen then immediately re-paint the last frame on restore.
 
-                While the window is hidden the monitoring thread may write log output
-                to the console, shifting the cursor. Rich's next update(refresh=True)
-                uses cursor-up by the last-known render height — if the cursor drifted,
-                content lands in the wrong place and the display appears blank.
-                Clearing resets cursor to (0,0) so the first post-restore render is clean.
+                The clear resets the cursor to (0,0) so Rich's cursor-tracking stays
+                correct after any log drift while hidden. The immediate re-paint with
+                _last_renderable avoids a 3-second blank while the monitoring thread
+                fetches fresh data.
                 """
                 try:
                     sys.stdout.write("\033[2J\033[H")
                     sys.stdout.flush()
                 except Exception:
                     pass
+                with contextlib.suppress(Exception):
+                    live_display.update(_last_renderable[0], refresh=True)
 
             tray_manager.set_restore_callback(_on_console_restore)
 
@@ -304,6 +309,7 @@ def _run_monitoring(args: argparse.Namespace) -> None:
                             pool_burn_rate_usd_per_hr=monitoring_data.get("pool_burn_rate_usd_per_hr"),  # Phase 8 NEW
                         )
 
+                        _last_renderable[0] = renderable
                         if live_display:
                             live_display.update(renderable, refresh=True)
 
