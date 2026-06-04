@@ -199,14 +199,14 @@ class SessionDisplayComponent:
                 label = date.fromisoformat(date_str).strftime("%b %d")
             except (ValueError, TypeError):
                 label = date_str[-5:]
-            today_marker = " [success]◀[/]" if is_today else ""
-            return f"{label}  {filled}{empty}  est. ${spend:.2f}{today_marker}"
+            label_markup = f"[success]{label}[/]" if is_today else f"[dim]{label}[/]"
+            return f"{label_markup}  {filled}{empty}  est. ${spend:.2f}"
 
         lines = []
         lines.append(f"[separator]{'─' * 60}[/]")
         lines.append("📊 [value]Daily pool spend[/]")
 
-        col_width = 34  # "Jun 02  ██████████  est. $XXX.XX ◀" max visible ~33
+        col_width = 34  # "Jun 02  ██████████  est. $XXX.XX" max visible ~31, 3-space gap
         mid = (len(days) + 1) // 2  # first column gets the extra row when odd
         col1, col2 = days[:mid], days[mid:]
         for i, left_day in enumerate(col1):
