@@ -207,10 +207,12 @@ class SessionDisplayComponent:
         lines.append("📊 [value]Daily pool spend[/]")
 
         col_width = 34  # "Jun 02  ██████████  est. $XXX.XX ◀" max visible ~33
-        for i in range(0, len(days), 2):
-            left = _day_cell(*days[i])
-            if i + 1 < len(days):
-                right = _day_cell(*days[i + 1])
+        mid = (len(days) + 1) // 2  # first column gets the extra row when odd
+        col1, col2 = days[:mid], days[mid:]
+        for i, left_day in enumerate(col1):
+            left = _day_cell(*left_day)
+            if i < len(col2):
+                right = _day_cell(*col2[i])
                 lines.append(f"   {_col_pad(left, col_width)}{right}")
             else:
                 lines.append(f"   {left}")
