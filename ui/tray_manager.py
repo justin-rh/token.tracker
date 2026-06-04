@@ -84,14 +84,6 @@ def _set_console_window_icon(image: Image.Image) -> None:
         if not hwnd:
             return
 
-        # Step 1: own AppUserModelID so the taskbar doesn't use python.exe's icon
-        try:
-            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
-                "TokenTracker.Console.1"
-            )
-        except Exception:
-            pass
-
         # Build ICO with multiple sizes for crisp rendering at every DPI
         buf = io.BytesIO()
         image.save(buf, format="ICO", sizes=[(256, 256), (64, 64), (32, 32), (16, 16)])
