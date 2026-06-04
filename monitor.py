@@ -54,6 +54,13 @@ _REPO_ROOT = Path(__file__).resolve().parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+# When installed as a pip entry point (token-tracker.exe), sys.argv[0] is
+# the .exe wrapper which Python cannot execute as a script.  The auto-detach
+# code in cli/main.py uses sys.argv[0] to relaunch in conhost.exe, so patch
+# it to this file's real path before any imports run.
+if sys.argv and sys.argv[0].lower().endswith(".exe"):
+    sys.argv[0] = str(Path(__file__).resolve())
+
 # Import the upstream CLI main function via the flat module layout.
 # The upstream entry point is cli/main.py::main().
 from cli.main import main as _upstream_main  # noqa: E402
