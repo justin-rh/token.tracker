@@ -161,24 +161,22 @@ class SessionDisplayComponent:
         daily_pool_spend: tuple,
         today_str: str,
         pool_spend_usd: float = 0.0,
-        bar_width: int = 20,
+        bar_width: int = 10,
     ) -> list:
         """Render a daily pool-spend bar chart as a list of Rich markup lines.
 
-        Returns [] when there is no pool spend at all (ANLX-03).
-        When auto-seed covers all spend (daily_pool_spend is all zeros but
-        pool_spend_usd > 0), renders a single "billing cycle total" row from
-        the API so the chart is not silently hidden.
+        Shows only non-zero days, capped to the last 8, in a two-column layout.
+        Returns [] when there is no pool spend at all.
         Bar characters: █ filled, ░ empty. Today's bar uses [success] (green);
-        other days use [value] (cyan). Each row: '   MMM DD  <bar>  est. $X.XX'.
+        other days use [value] (cyan).
         """
-        has_daily_data = daily_pool_spend and any(s > 0 for _, s in daily_pool_spend)
+        # Filter to non-zero days only, take the most recent 8
+        days = [(d, s) for d, s in daily_pool_spend if s > 0][-8:]
 
-        # Seed-only case: auto_seed sets seed_cutoff=tomorrow so log sessions are
-        # excluded; daily_pool_spend is all zeros but pool_spend_usd > 0 (from API).
-        if not has_daily_data:
+        if not days:
             if pool_spend_usd <= 0:
                 return []
+            # Seed-only fallback: no session data but seed covers a known total
             lines = []
             lines.append(f"[separator]{'─' * 60}[/]")
             lines.append("📊 [value]Daily pool spend[/]")
@@ -188,34 +186,34 @@ class SessionDisplayComponent:
             )
             return lines
 
-        max_spend = max(s for _, s in daily_pool_spend)
+        max_spend = max(s for _, s in days)
+
+        def _day_cell(date_str: str, spend: float) -> str:
+            filled_count = round((spend / max_spend) * bar_width) if max_spend > 0 else 0
+            empty_count = bar_width - filled_count
+            is_today = date_str == today_str
+            bar_style = "success" if is_today else "value"
+            filled = f"[{bar_style}]{'█' * filled_count}[/]" if filled_count else ""
+            empty = f"[dim]{'░' * empty_count}[/]" if empty_count else ""
+            try:
+                label = date.fromisoformat(date_str).strftime("%b %d")
+            except (ValueError, TypeError):
+                label = date_str[-5:]
+            today_marker = " [success]◀[/]" if is_today else ""
+            return f"{label}  {filled}{empty}  est. ${spend:.2f}{today_marker}"
+
         lines = []
         lines.append(f"[separator]{'─' * 60}[/]")
         lines.append("📊 [value]Daily pool spend[/]")
 
-        for date_str, spend in daily_pool_spend:
-            if max_spend > 0:
-                filled_count = round((spend / max_spend) * bar_width)
+        col_width = 34  # "Jun 02  ██████████  est. $XXX.XX ◀" max visible ~33
+        for i in range(0, len(days), 2):
+            left = _day_cell(*days[i])
+            if i + 1 < len(days):
+                right = _day_cell(*days[i + 1])
+                lines.append(f"   {_col_pad(left, col_width)}{right}")
             else:
-                filled_count = 0
-            empty_count = bar_width - filled_count
-
-            is_today = date_str == today_str
-            bar_style = "success" if is_today else "value"
-
-            filled_bar = f"[{bar_style}]{'█' * filled_count}[/]" if filled_count else ""
-            empty_bar = f"[dim]{'░' * empty_count}[/]" if empty_count else ""
-
-            try:
-                parsed = date.fromisoformat(date_str)
-                label = parsed.strftime("%b %d")
-            except (ValueError, TypeError):
-                label = date_str[-5:]
-
-            today_suffix = "  [success]◀ today[/]" if is_today else ""
-            lines.append(
-                f"   {label}  {filled_bar}{empty_bar}  est. ${spend:.2f}{today_suffix}"
-            )
+                lines.append(f"   {left}")
 
         return lines
 
