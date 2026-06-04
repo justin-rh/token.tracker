@@ -7,9 +7,11 @@ Threading model (per STATE.md):
   - icon.stop() called from main thread finally block in cli/main.py
 """
 import ctypes
+import io
 import logging
 import os
 import signal
+import tempfile
 import threading
 from datetime import datetime
 from typing import Callable, Optional, Tuple
@@ -65,6 +67,47 @@ _COIN = [
 ]
 
 
+def _set_console_window_icon(image: Image.Image) -> None:
+    """Set the Win32 console window's taskbar icon from a PIL Image.
+
+    Writes a temp ICO file, loads it with LoadImageW (guaranteed to work vs.
+    CreateIconFromResourceEx which behaves differently per Windows version),
+    sends WM_SETICON for both ICON_BIG and ICON_SMALL, then deletes the file.
+    No-ops silently when there is no Win32 console window (e.g. ConPTY).
+    """
+    try:
+        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        if not hwnd:
+            return
+
+        buf = io.BytesIO()
+        image.save(buf, format="ICO", sizes=[(64, 64), (32, 32), (16, 16)])
+
+        fd, tmp_path = tempfile.mkstemp(suffix=".ico")
+        try:
+            with os.fdopen(fd, "wb") as f:
+                f.write(buf.getvalue())
+
+            IMAGE_ICON = 1
+            LR_LOADFROMFILE = 0x00000010
+            LR_DEFAULTSIZE = 0x00000040
+
+            hicon = ctypes.windll.user32.LoadImageW(
+                None, tmp_path, IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE
+            )
+            if hicon:
+                WM_SETICON = 0x0080
+                ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, 1, hicon)  # ICON_BIG
+                ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, 0, hicon)  # ICON_SMALL
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+    except Exception:
+        pass
+
+
 class TrayManager:
     """Manages the pystray system tray icon lifecycle.
 
@@ -118,6 +161,7 @@ class TrayManager:
             title="Token Tracker  --  |  Last sync: never",
             menu=menu,
         )
+        _set_console_window_icon(image)  # match taskbar icon to tray coin
         # setup callback fires after message loop is ready — safe visible=True
         self._icon.run_detached(setup=lambda icon: setattr(icon, "visible", True))
         logger.info("TrayManager: icon started (run_detached)")
