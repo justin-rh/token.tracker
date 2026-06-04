@@ -293,6 +293,9 @@ def compute_pool_state(
         log_cutoff = seed_cutoff
 
     # Sum OVERAGE session costs since log_cutoff (D-01, D-02, D-03); bucket by date for ANLX-01
+    # pool_spend_usd uses log_cutoff to avoid double-counting sessions already covered by the seed.
+    # daily_spend uses cycle_start so the chart shows the full billing cycle — sessions before the
+    # seed cutoff are included in the chart even though they're excluded from the spend total.
     pool_spend_usd = seed_usd
     daily_spend: dict = {}
     for block in blocks:
@@ -300,14 +303,16 @@ def compute_pool_state(
         # pool bar reflects real-time spend during an ongoing session.
         if block.get("isGap", False):
             continue
-        # Skip sessions before the log cutoff (billing period start or seed date)
-        if not _in_billing_period(block.get("startTime", ""), log_cutoff):
+        # Skip sessions outside the billing period entirely
+        if not _in_billing_period(block.get("startTime", ""), cycle_start):
             continue
         # OVERAGE classification: all sessions (Teams/Enterprise) or threshold-based (Max plan)
         if all_sessions or _classify_overage(block, threshold_tokens):
             cost = block.get("costUSD", 0.0)
-            pool_spend_usd += cost
-            # Bucket by calendar date for daily chart (ANLX-01)
+            # Only add to pool_spend if after log_cutoff (seed already covers earlier spend)
+            if _in_billing_period(block.get("startTime", ""), log_cutoff):
+                pool_spend_usd += cost
+            # Always bucket for the daily chart regardless of seed cutoff
             start_raw = block.get("startTime", "")
             try:
                 block_date_str = datetime.fromisoformat(start_raw).date().isoformat()
