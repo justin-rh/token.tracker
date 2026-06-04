@@ -68,11 +68,15 @@ _COIN = [
 
 
 def _set_console_window_icon(image: Image.Image) -> None:
-    """Set the Win32 console window's taskbar icon from a PIL Image.
+    """Set the Win32 console window's title-bar AND taskbar icon from a PIL Image.
 
-    Writes a temp ICO file, loads it with LoadImageW (guaranteed to work vs.
-    CreateIconFromResourceEx which behaves differently per Windows version),
-    sends WM_SETICON for both ICON_BIG and ICON_SMALL, then deletes the file.
+    Three-step approach for Windows 10/11:
+      1. SetCurrentProcessExplicitAppUserModelID — gives the process its own
+         taskbar group so Windows stops inheriting python.exe's icon.
+      2. WM_SETICON (ICON_BIG / ICON_SMALL) — per-window icon slots.
+      3. SetClassLongPtrW (GCLP_HICON / GCLP_HICONSM) — updates the window
+         class icon that the shell reads for the taskbar button.
+
     No-ops silently when there is no Win32 console window (e.g. ConPTY).
     """
     try:
@@ -80,8 +84,17 @@ def _set_console_window_icon(image: Image.Image) -> None:
         if not hwnd:
             return
 
+        # Step 1: own AppUserModelID so the taskbar doesn't use python.exe's icon
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+                "TokenTracker.Console.1"
+            )
+        except Exception:
+            pass
+
+        # Build ICO with multiple sizes for crisp rendering at every DPI
         buf = io.BytesIO()
-        image.save(buf, format="ICO", sizes=[(64, 64), (32, 32), (16, 16)])
+        image.save(buf, format="ICO", sizes=[(256, 256), (64, 64), (32, 32), (16, 16)])
 
         fd, tmp_path = tempfile.mkstemp(suffix=".ico")
         try:
@@ -90,20 +103,36 @@ def _set_console_window_icon(image: Image.Image) -> None:
 
             IMAGE_ICON = 1
             LR_LOADFROMFILE = 0x00000010
-            LR_DEFAULTSIZE = 0x00000040
+            LR_DEFAULTSIZE  = 0x00000040
 
-            hicon = ctypes.windll.user32.LoadImageW(
+            hicon_big = ctypes.windll.user32.LoadImageW(
                 None, tmp_path, IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE
             )
-            if hicon:
-                WM_SETICON = 0x0080
-                ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, 1, hicon)  # ICON_BIG
-                ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, 0, hicon)  # ICON_SMALL
+            hicon_small = ctypes.windll.user32.LoadImageW(
+                None, tmp_path, IMAGE_ICON, 16, 16, LR_LOADFROMFILE
+            )
         finally:
             try:
                 os.unlink(tmp_path)
             except OSError:
                 pass
+
+        WM_SETICON   = 0x0080
+        GCLP_HICON   = -14   # class large icon
+        GCLP_HICONSM = -34   # class small icon
+
+        # Step 2: per-window icon
+        if hicon_big:
+            ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, 1, hicon_big)
+        if hicon_small:
+            ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, 0, hicon_small)
+
+        # Step 3: window-class icon (what the shell taskbar reads)
+        if hicon_big:
+            ctypes.windll.user32.SetClassLongPtrW(hwnd, GCLP_HICON, hicon_big)
+        if hicon_small:
+            ctypes.windll.user32.SetClassLongPtrW(hwnd, GCLP_HICONSM, hicon_small)
+
     except Exception:
         pass
 
