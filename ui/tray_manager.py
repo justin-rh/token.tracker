@@ -6,6 +6,7 @@ Threading model (per STATE.md):
   - update() called from MonitoringThread via on_data_update callback
   - icon.stop() called from main thread finally block in cli/main.py
 """
+import atexit
 import ctypes
 import io
 import logging
@@ -149,15 +150,23 @@ def _set_console_window_icon(image: Image.Image) -> None:
         if not hwnd:
             return
 
-        # Persist the ICO so Windows can re-read it for the taskbar button.
-        ico_path = os.path.join(tempfile.gettempdir(), "token-tracker-icon.ico")
+        # Use a PID-specific ICO path so concurrent instances never race on
+        # the same file — each process writes its own copy independently.
+        ico_path = os.path.join(
+            tempfile.gettempdir(), f"token-tracker-{os.getpid()}.ico"
+        )
         buf = io.BytesIO()
         image.save(buf, format="ICO", sizes=[(256, 256), (64, 64), (32, 32), (16, 16)])
         with open(ico_path, "wb") as f:
             f.write(buf.getvalue())
+        atexit.register(lambda p=ico_path: os.unlink(p) if os.path.exists(p) else None)
+
+        # Each instance gets its own AppUserModelID (PID-scoped) so it appears
+        # as a separate taskbar button instead of being silently merged.
+        app_id = f"TokenTracker.Console.{os.getpid()}"
 
         # Approach 1: set AppUserModel properties directly on the window HWND
-        _window_set_appusermodel(hwnd, "TokenTracker.Console.1", ico_path)
+        _window_set_appusermodel(hwnd, app_id, ico_path)
 
         # Approach 2: WM_SETICON (title bar) + class icons
         IMAGE_ICON    = 1
