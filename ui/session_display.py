@@ -428,9 +428,13 @@ class SessionDisplayComponent:
 
                     if rate > 0:
                         remaining_hrs = pool_state.pool_remaining_usd / rate
-                        hours = int(remaining_hrs)
-                        mins = int((remaining_hrs - hours) * 60)
-                        time_left_str = f"~{hours}h {mins}m remaining"
+                        days = int(remaining_hrs // 24)
+                        hours = int(remaining_hrs % 24)
+                        mins = int((remaining_hrs - int(remaining_hrs)) * 60)
+                        if days > 0:
+                            time_left_str = f"~{days}d {hours}h {mins}m remaining"
+                        else:
+                            time_left_str = f"~{hours}h {mins}m remaining"
 
                         now_utc = datetime.now(dt_timezone.utc)
                         exhaust_at = (now_utc + timedelta(hours=remaining_hrs)).astimezone()
