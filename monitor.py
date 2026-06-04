@@ -26,14 +26,6 @@ if sys.platform == "win32":
         _k32.SetConsoleCP(65001)
         sys.stdout.reconfigure(encoding="utf-8")
         sys.stderr.reconfigure(encoding="utf-8")
-        # Must be called before the shell registers our window — sets a unique
-        # AppUserModelID so the taskbar button uses our icon instead of python.exe's.
-        try:
-            _ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
-                "TokenTracker.Console.1"
-            )
-        except Exception:
-            pass
     else:
         # Running inside Windows Terminal (ConPTY) or an initial shell session.
         # Wrap stdout/stderr with a UTF-8 TextIOWrapper for correct encoding.

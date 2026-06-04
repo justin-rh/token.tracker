@@ -11,8 +11,10 @@ import io
 import logging
 import os
 import signal
+import struct
 import tempfile
 import threading
+import uuid
 from datetime import datetime
 from typing import Callable, Optional, Tuple
 
@@ -67,15 +69,78 @@ _COIN = [
 ]
 
 
+def _window_set_appusermodel(hwnd: int, app_id: str, ico_path: str) -> bool:
+    """Set AppUserModel properties directly on the window via IPropertyStore.
+
+    The console window is owned by conhost.exe, so SetCurrentProcessExplicitAppUserModelID
+    on python.exe has no effect on the taskbar button.  The correct approach is
+    SHGetPropertyStoreForWindow which targets the HWND directly, regardless of
+    which process owns it.
+
+    Sets:
+      PKEY_AppUserModel_ID (pid=5)                    — isolates this window in its own
+                                                         taskbar group (not grouped with
+                                                         other python.exe/conhost windows)
+      PKEY_AppUserModel_RelaunchIconResource (pid=23) — icon for the taskbar button and
+                                                         jump-list when a custom ID is set
+    """
+    try:
+        FMTID_AUM = list(uuid.UUID("{9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3}").bytes_le)
+        IID_IPS   = (ctypes.c_byte * 16)(
+            *uuid.UUID("{886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99}").bytes_le
+        )
+
+        ppv = ctypes.c_void_p()
+        hr  = ctypes.windll.shell32.SHGetPropertyStoreForWindow(
+            hwnd, IID_IPS, ctypes.byref(ppv)
+        )
+        if hr != 0 or not ppv.value:
+            return False
+
+        pps  = ppv.value
+        vtbl = ctypes.cast(
+            ctypes.cast(pps, ctypes.POINTER(ctypes.c_size_t))[0],
+            ctypes.POINTER(ctypes.c_size_t),
+        )
+        # IPropertyStore vtable: QI(0) AddRef(1) Release(2) GetCount(3)
+        #                         GetAt(4) GetValue(5) SetValue(6) Commit(7)
+        SetValue = ctypes.WINFUNCTYPE(
+            ctypes.c_int32, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_size_t
+        )(vtbl[6])
+        Commit  = ctypes.WINFUNCTYPE(ctypes.c_int32, ctypes.c_void_p)(vtbl[7])
+        Release = ctypes.WINFUNCTYPE(ctypes.c_uint32, ctypes.c_void_p)(vtbl[2])
+
+        str_bufs = []  # keep unicode buffers alive until Commit
+
+        def _set_str(pid: int, value: str) -> None:
+            pkey = (ctypes.c_byte * 20)(*FMTID_AUM, *struct.pack("<I", pid))
+            wstr = ctypes.create_unicode_buffer(value)
+            str_bufs.append(wstr)
+            ptr  = ctypes.cast(wstr, ctypes.c_void_p).value or 0
+            pv   = (ctypes.c_byte * 16)(
+                *struct.pack("<H", 31),      # VT_LPWSTR
+                0, 0, 0, 0, 0, 0,            # reserved
+                *struct.pack("<Q", ptr),      # pwszVal
+            )
+            SetValue(pps, ctypes.addressof(pkey), ctypes.addressof(pv))
+
+        _set_str(5,  app_id)           # PKEY_AppUserModel_ID
+        _set_str(23, ico_path + ",0")  # PKEY_AppUserModel_RelaunchIconResource
+        Commit(pps)
+        Release(pps)
+        return True
+    except Exception:
+        return False
+
+
 def _set_console_window_icon(image: Image.Image) -> None:
     """Set the Win32 console window's title-bar AND taskbar icon from a PIL Image.
 
-    Three-step approach for Windows 10/11:
-      1. SetCurrentProcessExplicitAppUserModelID — gives the process its own
-         taskbar group so Windows stops inheriting python.exe's icon.
-      2. WM_SETICON (ICON_BIG / ICON_SMALL) — per-window icon slots.
-      3. SetClassLongPtrW (GCLP_HICON / GCLP_HICONSM) — updates the window
-         class icon that the shell reads for the taskbar button.
+    Writes the icon to a persistent session file (not deleted on exit) so Windows
+    can re-read it for the taskbar.  Then uses two complementary approaches:
+      1. SHGetPropertyStoreForWindow — sets AppUserModel ID + icon on the HWND
+         directly (the only reliable way to affect the taskbar for conhost windows).
+      2. WM_SETICON + SetClassLongPtrW — title-bar icon and class-level fallback.
 
     No-ops silently when there is no Win32 console window (e.g. ConPTY).
     """
@@ -84,45 +149,36 @@ def _set_console_window_icon(image: Image.Image) -> None:
         if not hwnd:
             return
 
-        # Build ICO with multiple sizes for crisp rendering at every DPI
+        # Persist the ICO so Windows can re-read it for the taskbar button.
+        ico_path = os.path.join(tempfile.gettempdir(), "token-tracker-icon.ico")
         buf = io.BytesIO()
         image.save(buf, format="ICO", sizes=[(256, 256), (64, 64), (32, 32), (16, 16)])
+        with open(ico_path, "wb") as f:
+            f.write(buf.getvalue())
 
-        fd, tmp_path = tempfile.mkstemp(suffix=".ico")
-        try:
-            with os.fdopen(fd, "wb") as f:
-                f.write(buf.getvalue())
+        # Approach 1: set AppUserModel properties directly on the window HWND
+        _window_set_appusermodel(hwnd, "TokenTracker.Console.1", ico_path)
 
-            IMAGE_ICON = 1
-            LR_LOADFROMFILE = 0x00000010
-            LR_DEFAULTSIZE  = 0x00000040
+        # Approach 2: WM_SETICON (title bar) + class icons
+        IMAGE_ICON    = 1
+        LR_LOADFROMFILE = 0x00000010
+        LR_DEFAULTSIZE  = 0x00000040
+        WM_SETICON    = 0x0080
+        GCLP_HICON    = -14
+        GCLP_HICONSM  = -34
 
-            hicon_big = ctypes.windll.user32.LoadImageW(
-                None, tmp_path, IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE
-            )
-            hicon_small = ctypes.windll.user32.LoadImageW(
-                None, tmp_path, IMAGE_ICON, 16, 16, LR_LOADFROMFILE
-            )
-        finally:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
+        hicon_big = ctypes.windll.user32.LoadImageW(
+            None, ico_path, IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE
+        )
+        hicon_small = ctypes.windll.user32.LoadImageW(
+            None, ico_path, IMAGE_ICON, 16, 16, LR_LOADFROMFILE
+        )
 
-        WM_SETICON   = 0x0080
-        GCLP_HICON   = -14   # class large icon
-        GCLP_HICONSM = -34   # class small icon
-
-        # Step 2: per-window icon
         if hicon_big:
             ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, 1, hicon_big)
-        if hicon_small:
-            ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, 0, hicon_small)
-
-        # Step 3: window-class icon (what the shell taskbar reads)
-        if hicon_big:
             ctypes.windll.user32.SetClassLongPtrW(hwnd, GCLP_HICON, hicon_big)
         if hicon_small:
+            ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, 0, hicon_small)
             ctypes.windll.user32.SetClassLongPtrW(hwnd, GCLP_HICONSM, hicon_small)
 
     except Exception:
