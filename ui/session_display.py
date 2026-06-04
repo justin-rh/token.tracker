@@ -574,14 +574,6 @@ class SessionDisplayComponent:
             screen_buffer.append("")
 
         screen_buffer.append("")
-        screen_buffer.append("🔮 [value]Predictions:[/]")
-        screen_buffer.append(
-            f"   [info]Tokens will run out:[/] [warning]{predicted_end_str}[/]"
-        )
-        screen_buffer.append(
-            f"   [info]Limit resets at:[/]     [success]{reset_time_str}[/]"
-        )
-        screen_buffer.append("")
 
         self._add_notifications(
             screen_buffer,
