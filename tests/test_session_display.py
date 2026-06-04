@@ -174,11 +174,12 @@ class TestRenderDailySpendChart:
         assert len(header_lines) == 1
 
     def test_today_marker_present(self):
-        """Today's row contains the '◀ today' marker (ANLX-02)."""
+        """Today's date label uses [success] markup (ANLX-02)."""
         display = self._make_display()
         data = (("2026-06-01", 2.00), ("2026-06-02", 5.00))
         result = display._render_daily_spend_chart(data, today_str="2026-06-02")
-        today_lines = [l for l in result if "◀ today" in l]
+        # Today is indicated by [success] on the date label, not a trailing char
+        today_lines = [l for l in result if "[success]Jun 02[/]" in l]
         assert len(today_lines) == 1
 
     def test_non_today_rows_have_no_today_marker(self):

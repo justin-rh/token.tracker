@@ -240,7 +240,13 @@ class DisplayController:
 
         if not active_block:
             screen_buffer = self.session_display.format_no_active_session_screen(
-                args.plan, args.timezone, token_limit, current_time, args
+                args.plan, args.timezone, token_limit, current_time, args,
+                threshold_state=threshold_state,
+                pool_state=pool_state,
+                web_usage=web_usage,
+                last_web_sync=last_web_sync,
+                project_breakdown=project_breakdown,
+                pool_burn_rate_usd_per_hr=pool_burn_rate_usd_per_hr,
             )
             return self.buffer_manager.create_screen_renderable(screen_buffer)
 

@@ -219,6 +219,128 @@ class SessionDisplayComponent:
 
         return lines
 
+    def _render_pool_sections(self, screen_buffer: list, **kwargs) -> None:
+        """Render pool spend, daily chart, project breakdown, and web sync rows.
+
+        Shared between active-session and no-active-session screens so these
+        sections persist whenever there is no current Claude Code session.
+        Session-specific rows (model distribution, token burn rate, cost rate)
+        are NOT included here — they remain in format_active_session_screen only.
+        """
+        threshold_state = kwargs.get("threshold_state")
+
+        # Phase 3: Pool Dashboard
+        pool_state = kwargs.get("pool_state")
+        if (
+            pool_state is not None
+            and threshold_state is not None
+            and threshold_state.status != "calibrating"
+        ):
+            screen_buffer.append(f"[separator]{'─' * 60}[/]")
+            screen_buffer.append(
+                f"🏦 [value]Pool spent:[/]   est. ${pool_state.pool_spend_usd:.2f} / ${pool_state.pool_size_usd:.2f}"
+            )
+            web_usage = kwargs.get("web_usage")
+            pool_pct_for_bar = (
+                web_usage.utilization_pct
+                if web_usage is not None
+                else pool_state.pool_pct_spent
+            )
+            pool_bar = self._render_wide_progress_bar(pool_pct_for_bar)
+            pct_remaining = 100.0 - pool_pct_for_bar
+            screen_buffer.append(f"   {pool_bar} {pct_remaining:.1f}% remaining")
+
+            if pool_state.pool_spend_usd > 0:
+                ring_rate = kwargs.get("pool_burn_rate_usd_per_hr")
+                if ring_rate is not None and ring_rate > 0:
+                    rate = ring_rate
+                    rate_str = f"est. ${rate:.2f}/hr"
+                else:
+                    try:
+                        _cycle_start = date.fromisoformat(pool_state.billing_cycle_start)
+                        _days_elapsed = max(1, (date.today() - _cycle_start).days)
+                        rate = pool_state.pool_spend_usd / (_days_elapsed * 24)
+                        rate_str = f"est. ${rate:.2f}/hr [dim](cycle avg)[/]"
+                    except (ValueError, TypeError):
+                        rate = 0.0
+                        rate_str = ""
+
+                if rate > 0:
+                    remaining_hrs = pool_state.pool_remaining_usd / rate
+                    days = int(remaining_hrs // 24)
+                    hours = int(remaining_hrs % 24)
+                    mins = int((remaining_hrs - int(remaining_hrs)) * 60)
+                    time_left_str = (
+                        f"~{days}d {hours}h {mins}m remaining"
+                        if days > 0
+                        else f"~{hours}h {mins}m remaining"
+                    )
+                    now_utc = datetime.now(dt_timezone.utc)
+                    exhaust_at = (now_utc + timedelta(hours=remaining_hrs)).astimezone()
+                    exhaust_label = _format_exhaust_time(exhaust_at)
+                    screen_buffer.append(
+                        f"[warning]▲[/] [value]Pool burn:[/]    {rate_str} — {time_left_str}"
+                    )
+                    screen_buffer.append(
+                        f"   [dim]Exhausted by:[/]  [value]{exhaust_label}[/]"
+                    )
+                    next_reset = _next_billing_reset(pool_state.billing_cycle_start)
+                    if exhaust_at.date() < next_reset:
+                        days_early = (next_reset - exhaust_at.date()).days
+                        reset_label = f"{next_reset.strftime('%b')} {next_reset.day}"
+                        screen_buffer.append(
+                            f"[error]⚠[/]  [error]Pool exhausts {days_early}d before cycle reset ({reset_label})[/]"
+                        )
+
+            chart_lines = self._render_daily_spend_chart(
+                pool_state.daily_pool_spend,
+                today_str=date.today().isoformat(),
+                pool_spend_usd=pool_state.pool_spend_usd,
+            )
+            screen_buffer.extend(chart_lines)
+
+        # Phase 6: Per-project token breakdown
+        project_breakdown = kwargs.get("project_breakdown")
+        if project_breakdown is not None and (
+            project_breakdown.today or project_breakdown.billing_month
+        ):
+            screen_buffer.append(f"[separator]{'─' * 60}[/]")
+            left_lines: list = [f"📂 [value]Today (est.)[/]"]
+            right_lines: list = [f"📂 [value]This month (est.)[/]"]
+            for name, toks in (project_breakdown.today or []):
+                left_lines.append(f"  [dim]{_col_pad(name, 22)}[/] {_fmt_tokens(toks)}")
+            for name, toks in (project_breakdown.billing_month or []):
+                right_lines.append(f"  [dim]{_col_pad(name, 22)}[/] {_fmt_tokens(toks)}")
+            while len(left_lines) < len(right_lines):
+                left_lines.append("")
+            while len(right_lines) < len(left_lines):
+                right_lines.append("")
+            col_width = 36
+            for left, right in zip(left_lines, right_lines):
+                screen_buffer.append(f"{_col_pad(left, col_width)}{right}")
+
+        # Phase 4: Web utilization, reset countdown, last sync
+        web_usage = kwargs.get("web_usage")
+        if web_usage is not None:
+            screen_buffer.append(f"[separator]{'─' * 60}[/]")
+            util_bar = self._render_wide_progress_bar(web_usage.utilization_pct)
+            screen_buffer.append(
+                f"🌐 [value]Utilization:[/]   {util_bar} {web_usage.utilization_pct:.1f}%  [dim]via claude.ai[/]"
+            )
+            now_utc = datetime.now(dt_timezone.utc)
+            delta = web_usage.reset_at - now_utc
+            total_secs = max(0, int(delta.total_seconds()))
+            days, rem = divmod(total_secs, 86400)
+            hours, rem = divmod(rem, 3600)
+            mins = rem // 60
+            reset_str = f"{days}d {hours}h {mins}m" if days else f"{hours}h {mins}m"
+            screen_buffer.append(f"[dim]▪[/] [value]Resets in:[/]     {reset_str}")
+            last_sync = kwargs.get("last_web_sync")
+            if last_sync:
+                screen_buffer.append(
+                    f"🔄 [dim]Last web sync: {last_sync.astimezone().strftime('%H:%M:%S')}[/]"
+                )
+
     def format_active_session_screen_v2(self, data: SessionDisplayData) -> list[str]:
         """Format complete active session screen using data class.
 
@@ -372,145 +494,15 @@ class SessionDisplayComponent:
                             "[success]●[/] [success]Status:[/]              [success]INCLUDED[/]"
                         )
 
-            # Phase 3: Pool Dashboard rows (D-12, D-13, D-14; OVGE-01 through OVGE-04, DISP-02)
-            pool_state = kwargs.get("pool_state")
-            if (
-                pool_state is not None
-                and threshold_state is not None
-                and threshold_state.status != "calibrating"
-            ):
-                screen_buffer.append(f"[separator]{'─' * 60}[/]")
+            # Pool spend, daily chart, project breakdown, web sync — shared with
+            # the no-active-session screen via _render_pool_sections.
+            self._render_pool_sections(screen_buffer, **kwargs)
 
-                # Pool spend row — always shown when threshold is known (D-12, D-13, OVGE-02)
-                screen_buffer.append(
-                    f"🏦 [value]Pool spent:[/]   est. ${pool_state.pool_spend_usd:.2f} / ${pool_state.pool_size_usd:.2f}"
-                )
-
-                # Pool % remaining progress bar (D-14, OVGE-03)
-                # Web values win when present (STATE.md decision): use web_usage.utilization_pct
-                # for the bar and remaining-% so the dashboard matches the tray icon tooltip,
-                # both sourced from Anthropic's authoritative billing API.
-                # Falls back to locally-computed pool_pct_spent when web data is unavailable.
-                web_usage = kwargs.get("web_usage")
-                pool_pct_for_bar = (
-                    web_usage.utilization_pct
-                    if web_usage is not None
-                    else pool_state.pool_pct_spent
-                )
-                pool_bar = self._render_wide_progress_bar(pool_pct_for_bar)
-                pct_remaining = 100.0 - pool_pct_for_bar
-                screen_buffer.append(
-                    f"   {pool_bar} {pct_remaining:.1f}% remaining"
-                )
-
-                # Burn rate + exhaustion projection (BURN-01, BURN-02 + smarter projections)
-                # Gate on pool_spend_usd > 0 (not is_overage) so Teams/Enterprise accounts
-                # with all_sessions=True (threshold_tokens=None → is_overage=False) still see
-                # the projection.
-                if pool_state.pool_spend_usd > 0:
-                    ring_rate = kwargs.get("pool_burn_rate_usd_per_hr")
-
-                    if ring_rate is not None and ring_rate > 0:
-                        # Prefer the 30-min ring buffer rate — most recent and accurate.
-                        rate = ring_rate
-                        rate_str = f"est. ${rate:.2f}/hr"
-                    else:
-                        # Fallback: billing-cycle average. The ring buffer needs spend to
-                        # change between cycles; seed-only accounts never trigger it.
-                        try:
-                            _cycle_start = date.fromisoformat(pool_state.billing_cycle_start)
-                            _days_elapsed = max(1, (date.today() - _cycle_start).days)
-                            rate = pool_state.pool_spend_usd / (_days_elapsed * 24)
-                            rate_str = f"est. ${rate:.2f}/hr [dim](cycle avg)[/]"
-                        except (ValueError, TypeError):
-                            rate = 0.0
-                            rate_str = ""
-
-                    if rate > 0:
-                        remaining_hrs = pool_state.pool_remaining_usd / rate
-                        days = int(remaining_hrs // 24)
-                        hours = int(remaining_hrs % 24)
-                        mins = int((remaining_hrs - int(remaining_hrs)) * 60)
-                        if days > 0:
-                            time_left_str = f"~{days}d {hours}h {mins}m remaining"
-                        else:
-                            time_left_str = f"~{hours}h {mins}m remaining"
-
-                        now_utc = datetime.now(dt_timezone.utc)
-                        exhaust_at = (now_utc + timedelta(hours=remaining_hrs)).astimezone()
-                        exhaust_label = _format_exhaust_time(exhaust_at)
-
-                        screen_buffer.append(
-                            f"[warning]▲[/] [value]Pool burn:[/]    {rate_str} — {time_left_str}"
-                        )
-                        screen_buffer.append(
-                            f"   [dim]Exhausted by:[/]  [value]{exhaust_label}[/]"
-                        )
-
-                        next_reset = _next_billing_reset(pool_state.billing_cycle_start)
-                        if exhaust_at.date() < next_reset:
-                            days_early = (next_reset - exhaust_at.date()).days
-                            reset_label = f"{next_reset.strftime('%b')} {next_reset.day}"
-                            screen_buffer.append(
-                                f"[error]⚠[/]  [error]Pool exhausts {days_early}d before cycle reset ({reset_label})[/]"
-                            )
-
-                # Phase 10: Daily pool spend chart (ANLX-01, ANLX-02, ANLX-03)
-                chart_lines = self._render_daily_spend_chart(
-                    pool_state.daily_pool_spend,
-                    today_str=date.today().isoformat(),
-                    pool_spend_usd=pool_state.pool_spend_usd,
-                )
-                screen_buffer.extend(chart_lines)
-
-            # Phase 6: Per-project token breakdown (D-14, PROJ-01, PROJ-02, PROJ-03)
-            project_breakdown = kwargs.get("project_breakdown")
-            if project_breakdown is not None and (project_breakdown.today or project_breakdown.billing_month):
-                screen_buffer.append(f"[separator]{'─' * 60}[/]")
-                left_lines: list[str] = [f"📂 [value]Today (est.)[/]"]
-                right_lines: list[str] = [f"📂 [value]This month (est.)[/]"]
-                for name, toks in (project_breakdown.today or []):
-                    left_lines.append(f"  [dim]{_col_pad(name, 22)}[/] {_fmt_tokens(toks)}")
-                for name, toks in (project_breakdown.billing_month or []):
-                    right_lines.append(f"  [dim]{_col_pad(name, 22)}[/] {_fmt_tokens(toks)}")
-                while len(left_lines) < len(right_lines):
-                    left_lines.append("")
-                while len(right_lines) < len(left_lines):
-                    right_lines.append("")
-                col_width = 36
-                for left, right in zip(left_lines, right_lines):
-                    screen_buffer.append(f"{_col_pad(left, col_width)}{right}")
-
-            # Phase 4: Web usage rows (D-17, D-18, D-19 from 04-CONTEXT.md)
+            # Session-specific web rows: model distribution + burn/cost rates.
+            # These reference per_model_stats / burn_rate / session_cost which
+            # are only available when there IS an active session.
             web_usage = kwargs.get("web_usage")
             if web_usage is not None:
-                screen_buffer.append(f"[separator]{'─' * 60}[/]")
-
-                # D-17: Utilization row with progress bar (reuses _render_wide_progress_bar)
-                util_bar = self._render_wide_progress_bar(web_usage.utilization_pct)
-                screen_buffer.append(
-                    f"🌐 [value]Utilization:[/]   {util_bar} {web_usage.utilization_pct:.1f}%  [dim]via claude.ai[/]"
-                )
-
-                # D-17: Resets In row — countdown to reset_at (UTC)
-                now_utc = datetime.now(dt_timezone.utc)
-                delta = web_usage.reset_at - now_utc
-                total_secs = max(0, int(delta.total_seconds()))
-                days, rem = divmod(total_secs, 86400)
-                hours, rem = divmod(rem, 3600)
-                mins = rem // 60
-                reset_str = f"{days}d {hours}h {mins}m" if days else f"{hours}h {mins}m"
-                screen_buffer.append(
-                    f"[dim]▪[/] [value]Resets in:[/]     {reset_str}"
-                )
-
-                # D-19: Last web sync footer (shown after first successful fetch)
-                last_sync = kwargs.get("last_web_sync")
-                if last_sync:
-                    screen_buffer.append(
-                        f"🔄 [dim]Last web sync: {last_sync.astimezone().strftime('%H:%M:%S')}[/]"
-                    )
-
                 # D-08: Model Distribution, Burn Rate, Cost Rate moved here (Phase 6)
                 if per_model_stats:
                     model_bar = self.model_usage.render(per_model_stats)
@@ -643,6 +635,7 @@ class SessionDisplayComponent:
         token_limit: int,
         current_time: Optional[datetime] = None,
         args: Optional[Any] = None,
+        **kwargs,
     ) -> list[str]:
         """Format screen for no active session state.
 
@@ -698,5 +691,9 @@ class SessionDisplayComponent:
             screen_buffer.append(
                 "[dim]▪[/] [dim]--:--:--[/] [dim]No active session[/] | [dim]Ctrl+C to exit[/] [dim]●[/]"
             )
+
+        # Show pool spend, daily chart, project breakdown, and web sync even
+        # when there is no active Claude Code session.
+        self._render_pool_sections(screen_buffer, **kwargs)
 
         return screen_buffer
