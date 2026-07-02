@@ -129,6 +129,47 @@ def _read_pool_config(config_dir: Path) -> Tuple[float, int, float, Optional[dat
     return pool_size, cycle_day, seed_usd, seed_cutoff, all_sessions
 
 
+def read_pool_size(config_dir: Optional[Path] = None) -> float:
+    """Return the configured pool_size_usd from config.json (default 500.0)."""
+    if config_dir is None:
+        config_dir = _DEFAULT_CONFIG_DIR
+    return _read_pool_config(config_dir)[0]
+
+
+def write_pool_size(pool_size_usd: float, config_dir: Optional[Path] = None) -> None:
+    """Persist pool_size_usd to config.json, preserving all other keys.
+
+    Uses the same atomic .tmp rename pattern as _write_pool_spend_cache.
+    Takes effect on the next compute_pool_state() call — config.json is
+    re-read on every monitoring cycle.
+    """
+    if config_dir is None:
+        config_dir = _DEFAULT_CONFIG_DIR
+    config_dir.mkdir(parents=True, exist_ok=True)
+    config_file = config_dir / "config.json"
+
+    data: dict = {}
+    if config_file.exists():
+        try:
+            with open(config_file, encoding="utf-8") as f:
+                loaded = json.load(f)
+            if isinstance(loaded, dict):
+                data = loaded
+        except Exception as exc:
+            logger.warning("Failed to read config.json before pool size update: %s", exc)
+
+    data["pool_size_usd"] = pool_size_usd
+
+    temp_file = config_file.with_suffix(".tmp")
+    try:
+        with open(temp_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        temp_file.replace(config_file)
+        logger.info("config.json: pool_size_usd set to %.2f", pool_size_usd)
+    except Exception as exc:
+        logger.warning("Failed to write config.json for pool size: %s", exc)
+
+
 def _derive_billing_cycle_start(cycle_day: int, today: date | None = None) -> date:
     """Derive the most recent billing cycle start date from today and cycle_day.
 

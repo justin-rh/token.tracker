@@ -429,3 +429,43 @@ class TestDailyPoolSpend:
         result = compute_pool_state(blocks, KNOWN_STATE, config_dir=tmp_path, today=date(2026, 6, 1))
         spend_map = dict(result.daily_pool_spend)
         assert abs(spend_map["2026-06-01"] - 1.00) < 0.001
+
+
+# ---------------------------------------------------------------------------
+# read_pool_size / write_pool_size — tray "Max Pool" menu support
+# ---------------------------------------------------------------------------
+
+class TestPoolSizeReadWrite:
+    """read_pool_size() and write_pool_size() round-trip through config.json."""
+
+    def test_read_default_when_no_config(self, tmp_path):
+        from core.pool_state_manager import read_pool_size
+        assert read_pool_size(config_dir=tmp_path) == pytest.approx(500.0)
+
+    def test_write_then_read_round_trip(self, tmp_path):
+        from core.pool_state_manager import read_pool_size, write_pool_size
+        write_pool_size(750.0, config_dir=tmp_path)
+        assert read_pool_size(config_dir=tmp_path) == pytest.approx(750.0)
+
+    def test_write_preserves_other_config_keys(self, tmp_path):
+        from core.pool_state_manager import write_pool_size
+        config_file = tmp_path / "config.json"
+        config_file.write_text(
+            json.dumps({"pool_size_usd": 500.0, "billing_cycle_start_day": 15})
+        )
+        write_pool_size(1000.0, config_dir=tmp_path)
+        data = json.loads(config_file.read_text())
+        assert data["pool_size_usd"] == pytest.approx(1000.0)
+        assert data["billing_cycle_start_day"] == 15
+
+    def test_write_creates_config_dir(self, tmp_path):
+        from core.pool_state_manager import read_pool_size, write_pool_size
+        nested = tmp_path / "does-not-exist-yet"
+        write_pool_size(750.0, config_dir=nested)
+        assert read_pool_size(config_dir=nested) == pytest.approx(750.0)
+
+    def test_new_size_flows_into_compute_pool_state(self, tmp_path):
+        from core.pool_state_manager import write_pool_size
+        write_pool_size(1000.0, config_dir=tmp_path)
+        result = compute_pool_state([], KNOWN_STATE, config_dir=tmp_path)
+        assert result.pool_size_usd == pytest.approx(1000.0)

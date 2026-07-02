@@ -615,7 +615,7 @@ class SessionDisplayComponent:
 
         if show_exceed_notification:
             screen_buffer.append(
-                "[error]▲[/] [error]You have exceeded the maximum cost limit![/]"
+                "[yellow]▲[/] [yellow]You are spending more tokens than your usual.[/]"
             )
             notifications_added = True
 

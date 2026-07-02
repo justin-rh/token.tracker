@@ -173,6 +173,10 @@ def normalize_model_name(model: str) -> str:
 
     model_lower = model.lower()
 
+    # Claude 5 family (Fable/Mythos) — pass through lowercased, e.g. "claude-fable-5"
+    if "fable" in model_lower or "mythos" in model_lower:
+        return model_lower
+
     if (
         "claude-opus-4-" in model_lower
         or "claude-sonnet-4-" in model_lower

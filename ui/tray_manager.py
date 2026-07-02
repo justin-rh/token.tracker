@@ -23,7 +23,13 @@ from typing import Callable, Optional, Tuple
 import pystray
 from PIL import Image
 
+from core.pool_state_manager import read_pool_size, write_pool_size
+from core.startup import disable_startup, enable_startup, is_startup_enabled
+
 logger = logging.getLogger(__name__)
+
+# Selectable max pool sizes for the tray "Max Pool" submenu (default $500)
+_POOL_SIZE_OPTIONS = (500.0, 750.0, 1000.0)
 
 # Windows ShowWindow / GetAncestor / extended-style constants
 SW_HIDE = 0
@@ -238,6 +244,26 @@ class TrayManager:
             ),
             pystray.MenuItem("Hide to Tray", self._hide_console),
             pystray.MenuItem("Open Dashboard", self._show_console),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem(
+                "Start on login",
+                self._toggle_startup,
+                checked=lambda item: is_startup_enabled(),
+            ),
+            pystray.MenuItem(
+                "Max Pool",
+                pystray.Menu(
+                    *(
+                        pystray.MenuItem(
+                            f"${size:,.0f}",
+                            self._make_pool_size_setter(size),
+                            checked=self._make_pool_size_checker(size),
+                            radio=True,
+                        )
+                        for size in _POOL_SIZE_OPTIONS
+                    )
+                ),
+            ),
             pystray.MenuItem("Quit", self._quit),
         )
         image = self._make_icon_image(0.0)  # initial green (no data yet)
@@ -435,6 +461,35 @@ class TrayManager:
         self._console_hidden = False
         if self._on_restore is not None:
             self._on_restore()
+
+    @staticmethod
+    def _make_pool_size_setter(size: float) -> Callable:
+        """Return a menu action that writes the given pool size to config.json.
+
+        The new size takes effect on the next monitoring cycle —
+        compute_pool_state() re-reads config.json every call.
+        """
+        def _set(icon: pystray.Icon, item: pystray.MenuItem) -> None:
+            write_pool_size(size)
+        return _set
+
+    @staticmethod
+    def _make_pool_size_checker(size: float) -> Callable:
+        """Return a checked-callback that is True when config matches this size.
+
+        pystray re-evaluates checked callbacks each time the menu opens, so
+        the radio mark always reflects the current config.json value.
+        """
+        def _checked(item: pystray.MenuItem) -> bool:
+            return read_pool_size() == size
+        return _checked
+
+    def _toggle_startup(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
+        """Toggle auto-start on login via the Windows registry."""
+        if is_startup_enabled():
+            disable_startup()
+        else:
+            enable_startup()
 
     def _quit(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         """Trigger clean shutdown identical to Ctrl+C (TRAY-03 Quit).

@@ -27,6 +27,12 @@ class PricingCalculator:
     """
 
     FALLBACK_PRICING: Dict[str, Dict[str, float]] = {
+        "fable": {
+            "input": 10.0,
+            "output": 50.0,
+            "cache_creation": 12.5,
+            "cache_read": 1.0,
+        },
         "opus": {
             "input": 15.0,
             "output": 75.0,
@@ -175,6 +181,8 @@ class PricingCalculator:
 
         # Fallback to hardcoded pricing based on model type
         model_lower = model.lower()
+        if "fable" in model_lower or "mythos" in model_lower:
+            return self.FALLBACK_PRICING["fable"]
         if "opus" in model_lower:
             return self.FALLBACK_PRICING["opus"]
         if "haiku" in model_lower:

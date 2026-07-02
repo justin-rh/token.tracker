@@ -243,7 +243,17 @@ class TimeProgressBar(BaseProgressBar):
 
 
 class ModelUsageBar(BaseProgressBar):
-    """Model usage progress bar showing Sonnet vs Opus distribution."""
+    """Model usage progress bar showing Sonnet / Opus / Fable / Haiku distribution."""
+
+    # (label, name substrings, Rich style) — order fixes segment order in the bar.
+    # First matching bucket wins; unmatched models fall into "Other".
+    _BUCKETS = (
+        ("Sonnet", ("sonnet",), "info"),
+        ("Opus", ("opus",), "warning"),
+        ("Fable", ("fable", "mythos"), "success"),
+        ("Haiku", ("haiku",), "error"),
+        ("Other", (), "table.border"),
+    )
 
     def render(self, per_model_stats: dict[str, Any]) -> str:
         """Render model usage progress bar.
@@ -258,68 +268,41 @@ class ModelUsageBar(BaseProgressBar):
             empty_bar = self._render_bar(0, empty_style="table.border")
             return f"[info]►[/] [{empty_bar}] No model data"
 
-        model_names = list(per_model_stats.keys())
-        if not model_names:
-            empty_bar = self._render_bar(0, empty_style="table.border")
-            return f"[info]►[/] [{empty_bar}] Empty model stats"
-
-        sonnet_tokens = 0
-        opus_tokens = 0
-        other_tokens = 0
-
+        bucket_tokens = {label: 0 for label, _, _ in self._BUCKETS}
         for model_name, stats in per_model_stats.items():
             model_tokens = stats.get("input_tokens", 0) + stats.get("output_tokens", 0)
-
-            if "sonnet" in model_name.lower():
-                sonnet_tokens += model_tokens
-            elif "opus" in model_name.lower():
-                opus_tokens += model_tokens
+            name_lower = model_name.lower()
+            for label, substrings, _ in self._BUCKETS:
+                if any(s in name_lower for s in substrings):
+                    bucket_tokens[label] += model_tokens
+                    break
             else:
-                other_tokens += model_tokens
+                bucket_tokens["Other"] += model_tokens
 
-        total_tokens = sonnet_tokens + opus_tokens + other_tokens
-
+        total_tokens = sum(bucket_tokens.values())
         if total_tokens == 0:
             empty_bar = self._render_bar(0, empty_style="table.border")
             return f"[info]►[/] [{empty_bar}] No tokens used"
 
-        sonnet_percentage = percentage(sonnet_tokens, total_tokens)
-        opus_percentage = percentage(opus_tokens, total_tokens)
-        other_percentage = percentage(other_tokens, total_tokens)
-
-        sonnet_filled = int(self.width * sonnet_tokens / total_tokens)
-        opus_filled = int(self.width * opus_tokens / total_tokens)
-
-        total_filled = sonnet_filled + opus_filled
-        if total_filled < self.width:
-            if sonnet_tokens >= opus_tokens:
-                sonnet_filled += self.width - total_filled
-            else:
-                opus_filled += self.width - total_filled
-        elif total_filled > self.width:
-            if sonnet_tokens >= opus_tokens:
-                sonnet_filled -= total_filled - self.width
-            else:
-                opus_filled -= total_filled - self.width
-
-        sonnet_bar = "█" * sonnet_filled
-        opus_bar = "█" * opus_filled
+        # Integer segment widths; hand the rounding remainder to the largest bucket
+        filled = {
+            label: int(self.width * tokens / total_tokens)
+            for label, tokens in bucket_tokens.items()
+        }
+        largest = max(bucket_tokens, key=lambda label: bucket_tokens[label])
+        filled[largest] += self.width - sum(filled.values())
 
         bar_segments = []
-        if sonnet_filled > 0:
-            bar_segments.append(f"[info]{sonnet_bar}[/]")
-        if opus_filled > 0:
-            bar_segments.append(f"[warning]{opus_bar}[/]")
+        summary_parts = []
+        for label, _, style in self._BUCKETS:
+            if bucket_tokens[label] <= 0:
+                continue
+            if filled[label] > 0:
+                bar_segments.append(f"[{style}]{'█' * filled[label]}[/]")
+            pct = percentage(bucket_tokens[label], total_tokens)
+            summary_parts.append(f"{label} {pct:.1f}%")
 
         bar_display = "".join(bar_segments)
-
-        if opus_tokens > 0 and sonnet_tokens > 0:
-            summary = f"Sonnet {sonnet_percentage:.1f}% | Opus {opus_percentage:.1f}%"
-        elif sonnet_tokens > 0:
-            summary = f"Sonnet {sonnet_percentage:.1f}%"
-        elif opus_tokens > 0:
-            summary = f"Opus {opus_percentage:.1f}%"
-        else:
-            summary = f"Other {other_percentage:.1f}%"
+        summary = " | ".join(summary_parts)
 
         return f"[info]►[/] [{bar_display}] {summary}"
